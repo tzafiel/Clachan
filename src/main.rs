@@ -1,6 +1,5 @@
 #![allow(dead_code)]
 
-use macroquad::audio::{load_sound_from_bytes, play_sound, PlaySoundParams, Sound};
 use macroquad::prelude::*;
 
 // ============================================================================
@@ -121,37 +120,21 @@ mod constants {
     }
 
     pub const MATERIALS: [MaterialSpec; 16] = [
-        // 0: Air
         MaterialSpec { density_kgm3: 1.225, tensile_pa: 0.0, shear_pa: 0.0, friction_mu: 0.0, restitution: 0.0, porosity: 1.0, ignition_k: 9999.0, sound_absorb: 0.02 },
-        // 1: Water
         MaterialSpec { density_kgm3: 1000.0, tensile_pa: 0.0, shear_pa: 0.0, friction_mu: 0.05, restitution: 0.02, porosity: 1.0, ignition_k: 9999.0, sound_absorb: 0.20 },
-        // 2: Soil
         MaterialSpec { density_kgm3: 1500.0, tensile_pa: 1.0e4, shear_pa: 2.0e4, friction_mu: 0.65, restitution: 0.05, porosity: 0.45, ignition_k: 9999.0, sound_absorb: 0.55 },
-        // 3: Peat
         MaterialSpec { density_kgm3: 900.0, tensile_pa: 5.0e3, shear_pa: 8.0e3, friction_mu: 0.45, restitution: 0.03, porosity: 0.80, ignition_k: 520.0, sound_absorb: 0.70 },
-        // 4: Granite
         MaterialSpec { density_kgm3: 2700.0, tensile_pa: 1.5e7, shear_pa: 3.0e7, friction_mu: 0.75, restitution: 0.25, porosity: 0.02, ignition_k: 9999.0, sound_absorb: 0.92 },
-        // 5: Oak
         MaterialSpec { density_kgm3: 750.0, tensile_pa: 9.0e7, shear_pa: 1.2e7, friction_mu: 0.55, restitution: 0.20, porosity: 0.25, ignition_k: 573.0, sound_absorb: 0.65 },
-        // 6: Pine
         MaterialSpec { density_kgm3: 520.0, tensile_pa: 6.0e7, shear_pa: 7.0e6, friction_mu: 0.50, restitution: 0.18, porosity: 0.35, ignition_k: 530.0, sound_absorb: 0.55 },
-        // 7: Thatch
         MaterialSpec { density_kgm3: 180.0, tensile_pa: 2.0e5, shear_pa: 1.5e5, friction_mu: 0.60, restitution: 0.05, porosity: 0.90, ignition_k: 495.0, sound_absorb: 0.75 },
-        // 8: HempRope
         MaterialSpec { density_kgm3: 850.0, tensile_pa: 6.5e7, shear_pa: 180.0, friction_mu: 0.62, restitution: 0.06, porosity: 0.65, ignition_k: 510.0, sound_absorb: 0.40 },
-        // 9: Wool
         MaterialSpec { density_kgm3: 320.0, tensile_pa: 1.5e6, shear_pa: 2.5e5, friction_mu: 0.65, restitution: 0.04, porosity: 0.85, ignition_k: 620.0, sound_absorb: 0.80 },
-        // 10: Leather
         MaterialSpec { density_kgm3: 940.0, tensile_pa: 2.5e7, shear_pa: 8.0e6, friction_mu: 0.60, restitution: 0.10, porosity: 0.20, ignition_k: 640.0, sound_absorb: 0.50 },
-        // 11: Flesh
         MaterialSpec { density_kgm3: 1060.0, tensile_pa: 1.5e6, shear_pa: 4.5e5, friction_mu: 0.45, restitution: 0.05, porosity: 0.10, ignition_k: 750.0, sound_absorb: 0.45 },
-        // 12: Bone
         MaterialSpec { density_kgm3: 1900.0, tensile_pa: 1.2e8, shear_pa: 5.0e7, friction_mu: 0.40, restitution: 0.15, porosity: 0.05, ignition_k: 900.0, sound_absorb: 0.60 },
-        // 13: Iron
         MaterialSpec { density_kgm3: 7870.0, tensile_pa: 3.5e8, shear_pa: 2.2e8, friction_mu: 0.35, restitution: 0.35, porosity: 0.0, ignition_k: 1800.0, sound_absorb: 0.85 },
-        // 14: Steel
         MaterialSpec { density_kgm3: 7850.0, tensile_pa: 6.0e8, shear_pa: 4.2e8, friction_mu: 0.30, restitution: 0.45, porosity: 0.0, ignition_k: 1850.0, sound_absorb: 0.88 },
-        // 15: BlackPowder
         MaterialSpec { density_kgm3: 1700.0, tensile_pa: 0.0, shear_pa: 0.0, friction_mu: 0.50, restitution: 0.0, porosity: 0.95, ignition_k: 450.0, sound_absorb: 0.25 },
     ];
 
@@ -177,31 +160,26 @@ mod constants {
         pub preset_name: String,
         pub world_seed: u64,
         pub era_year: i32,
-        // 1. Spacetime & Kinematics
         pub gravity_mps2: f32,
         pub air_density_kgm3: f32,
         pub day_length_sec: f32,
         pub global_friction_mult: f32,
         pub global_restitution_mult: f32,
         pub knockback_mult: f32,
-        // 2. Climate & Atmosphere
         pub base_temp_kelvin: f32,
         pub rain_probability: f32,
         pub base_wind_mps: f32,
         pub mist_baseline: f32,
-        pub era_darkness: f32, // 0.0 = bright golden 1744, 1.0 = bleak ash 1746
-        // 3. Thermodynamics & Chemistry
+        pub era_darkness: f32,
         pub wetness_soak_rate: f32,
         pub wetness_dry_rate: f32,
         pub ignition_humidity_penalty: f32,
-        // 4. Biology & Consequence
         pub lethality_mult: f32,
         pub stamina_drain_mult: f32,
         pub bleed_rate_mult: f32,
         pub hypothermia_rate: f32,
         pub defeat_mode: DefeatMode,
         pub defeat_time_skip_days: u32,
-        // 5. Sensory & Social
         pub vision_range_m: f32,
         pub hearing_range_m: f32,
         pub gossip_spread_radius_m: f32,
@@ -317,17 +295,14 @@ mod field {
         let n = fbm2d(seed, x * 0.025, y * 0.025, 4);
         let detail = fbm2d(seed.wrapping_add(77), x * 0.09, y * 0.09, 2);
 
-        // Western sea loch shoreline
         let loch_edge = -28.0 + (y * 0.045).sin() * 6.5 + (n - 0.5) * 8.0;
         if x < loch_edge {
             return (-2.0, TerrainKind::LochWater);
         }
 
-        // General elevation rises gently eastward toward Highland crags
         let east_slope = ((x + 25.0) * 0.14).max(0.0);
         let elev = east_slope + (n - 0.45) * 8.0;
 
-        // Wade's Military Road running north-south through the glen
         let rx = road_center_x(y);
         if (x - rx).abs() < 2.25 {
             return (elev.max(0.5), TerrainKind::MudRoad);
@@ -348,7 +323,7 @@ mod field {
     #[derive(Clone, Debug)]
     pub struct WeatherState {
         pub day_count: u32,
-        pub time_of_day: f32, // 0.0..1.0 (0.25 dawn, 0.5 noon, 0.78 dusk)
+        pub time_of_day: f32,
         pub sun_warmth: f32,
         pub sun_dir: Vec2,
         pub wind_vec: Vec2,
@@ -361,7 +336,7 @@ mod field {
         pub fn new(cfg: &UniverseConfig) -> Self {
             Self {
                 day_count: 1,
-                time_of_day: 0.36, // Bright golden late-morning start
+                time_of_day: 0.36,
                 sun_warmth: 0.9,
                 sun_dir: Vec2::new(0.65, 0.45),
                 wind_vec: Vec2::new(cfg.base_wind_mps, 1.2),
@@ -379,10 +354,9 @@ mod field {
             }
             let angle = (self.time_of_day - 0.25) * std::f32::consts::TAU;
             let sun_h = angle.sin().clamp(-0.4, 1.0);
-            self.sun_dir = Vec2::new(angle.cos() * 0.9, (0.35 + (1.0 - sun_h.max(0.0)) * 0.55));
+            self.sun_dir = Vec2::new(angle.cos() * 0.9, 0.35 + (1.0 - sun_h.max(0.0)) * 0.55);
             self.sun_warmth = (sun_h.max(0.0) * (1.0 - cfg.era_darkness * 0.65)).clamp(0.08, 1.0);
 
-            // Smooth deterministic weather wave
             let w_phase = (self.day_count as f32 * 2.7 + self.time_of_day * 6.283).sin() * 0.5 + 0.5;
             let target_rain = if w_phase < cfg.rain_probability {
                 ((cfg.rain_probability - w_phase) / cfg.rain_probability.max(0.05)).clamp(0.15, 1.0)
@@ -450,14 +424,14 @@ mod architecture {
         pub id: u32,
         pub name: String,
         pub role: String,
-        pub x: f32, // Top-left in meters
+        pub x: f32,
         pub y: f32,
         pub w: f32,
         pub h: f32,
         pub door_pos: Vec2,
         pub hearth_pos: Vec2,
         pub hearth_lit: bool,
-        pub roof_alpha: f32, // Smoothly fades to 0 when player steps inside
+        pub roof_alpha: f32,
     }
 
     impl BuildingRecord {
@@ -469,18 +443,15 @@ mod architecture {
             p.distance(self.door_pos) < 1.85
         }
 
-        /// Wall collision with real open doorway portal on the south facade
         pub fn resolve_wall_collision(&self, prev: Vec2, next: Vec2, radius: f32) -> Vec2 {
             let was_in = self.contains(prev);
             let now_in = self.contains(next);
             if was_in == now_in {
                 return next;
             }
-            // Allow smooth transit through the doorway opening
             if self.near_door(prev) || self.near_door(next) {
                 return next;
             }
-            // Otherwise block solid stone masonry walls
             let mut out = next;
             if !was_in && now_in {
                 let dl = (next.x - self.x).abs();
@@ -500,7 +471,6 @@ mod architecture {
         }
 
         pub fn blocks_segment(&self, a: Vec2, b: Vec2) -> bool {
-            // Sample 8 interior points along ray for fast, deterministic occlusion
             for i in 1..8 {
                 let t = i as f32 / 8.0;
                 let p = a.lerp(b, t);
@@ -591,7 +561,7 @@ mod linguistics {
     pub struct MemoryEvent {
         pub kind: MemoryKind,
         pub timestamp: f32,
-        pub weight: f32, // positive = respect/trust, negative = fear/hostility
+        pub weight: f32,
     }
 
     #[derive(Clone, Debug)]
@@ -639,7 +609,6 @@ mod linguistics {
         pub ttl: f32,
     }
 
-    /// Deterministic phonological & lexical rewrite rules (zero LLM)
     pub fn apply_dialect(base: &str, dialect: DialectId) -> String {
         match dialect {
             DialectId::Highland1744 => {
@@ -806,14 +775,15 @@ mod entities {
         pub facing: Vec2,
         pub mass_kg: f32,
         pub material: MaterialId,
-        pub wetness: f32,         // 0..1 soaked wool/coat
-        pub temp_k: f32,          // core body temp (~310K healthy)
-        pub health: f32,          // 0..100
-        pub stamina: f32,         // 0..100
-        pub bleed_rate: f32,      // hp/sec
-        pub blood_stain: f32,     // 0..1 visual & social contamination
-        pub blade_sharpness: f32, // 0..1
-        pub powder_wetness: f32,  // 0..1 black powder fouling
+        pub wetness: f32,
+        pub temp_k: f32,
+        pub health: f32,
+        pub max_health: f32,
+        pub stamina: f32,
+        pub bleed_rate: f32,
+        pub blood_stain: f32,
+        pub blade_sharpness: f32,
+        pub powder_wetness: f32,
         pub carrying_id: Option<u32>,
         pub mounted_id: Option<u32>,
         pub buried: bool,
@@ -835,7 +805,6 @@ mod entities {
         pub discovered_by_patrol: bool,
     }
 
-    /// Multiplayer-ready command packet — local & networked actions share one pipe
     #[derive(Clone, Debug)]
     pub enum CommandPacket {
         Move { player: PlayerId, dir: Vec2, sprint: bool },
@@ -972,8 +941,8 @@ mod audio {
         buf.extend_from_slice(b"WAVE");
         buf.extend_from_slice(b"fmt ");
         buf.extend_from_slice(&16u32.to_le_bytes());
-        buf.extend_from_slice(&1u16.to_le_bytes()); // PCM
-        buf.extend_from_slice(&1u16.to_le_bytes()); // Mono
+        buf.extend_from_slice(&1u16.to_le_bytes());
+        buf.extend_from_slice(&1u16.to_le_bytes());
         buf.extend_from_slice(&sample_rate.to_le_bytes());
         buf.extend_from_slice(&(sample_rate * 2).to_le_bytes());
         buf.extend_from_slice(&2u16.to_le_bytes());
@@ -992,7 +961,6 @@ mod audio {
             let sr = 22050u32;
             let mut rng = Rng::new(1744_888);
 
-            // 1. Steel slash
             let steel_s: Vec<f32> = (0..(sr / 5))
                 .map(|i| {
                     let t = i as f32 / sr as f32;
@@ -1004,7 +972,6 @@ mod audio {
                 })
                 .collect();
 
-            // 2. Hemp rope snap
             let rope_s: Vec<f32> = (0..(sr / 6))
                 .map(|i| {
                     let t = i as f32 / sr as f32;
@@ -1015,7 +982,6 @@ mod audio {
                 })
                 .collect();
 
-            // 3. Black-powder flintlock boom
             let mut lp = 0.0f32;
             let gun_s: Vec<f32> = (0..(sr / 2))
                 .map(|i| {
@@ -1028,7 +994,6 @@ mod audio {
                 })
                 .collect();
 
-            // 4. Wet powder misfire (dry flint click + faint fizzle)
             let misfire_s: Vec<f32> = (0..(sr / 5))
                 .map(|i| {
                     let t = i as f32 / sr as f32;
@@ -1038,7 +1003,6 @@ mod audio {
                 })
                 .collect();
 
-            // 5. Highland mount whistle
             let whistle_s: Vec<f32> = (0..(sr / 3))
                 .map(|i| {
                     let t = i as f32 / sr as f32;
@@ -1048,7 +1012,6 @@ mod audio {
                 })
                 .collect();
 
-            // 6. Formant vocal bark (glottal pulse + F1/F2 resonance)
             let bark_s: Vec<f32> = (0..(sr / 5))
                 .map(|i| {
                     let t = i as f32 / sr as f32;
@@ -1120,18 +1083,15 @@ mod painter {
     void main() {
         vec2 px = vec2(1.0 / max(u_res_x, 1.0), 1.0 / max(u_res_y, 1.0));
 
-        // Subtle impasto oil-brush sample blend
         vec4 c0 = texture2D(Texture, uv);
         vec4 c1 = texture2D(Texture, uv + vec2(px.x * 1.4, px.y * 0.6));
         vec4 c2 = texture2D(Texture, uv - vec2(px.x * 0.9, px.y * 1.2));
         vec3 col = (c0.rgb * 0.62 + c1.rgb * 0.20 + c2.rgb * 0.18);
 
-        // Woven linen canvas grain
         float weave = sin(uv.x * u_res_x * 0.75) * sin(uv.y * u_res_y * 0.75) * 0.018;
         float grain = (hash(floor(uv * vec2(u_res_x, u_res_y) * 0.5)) - 0.5) * 0.025;
         col += vec3(weave + grain);
 
-        // Bright 1744 golden sunlit warmth vs Bleak 1746 ash/slate grade
         vec3 warm_tint = vec3(1.08, 1.02, 0.90);
         vec3 bleak_tint = vec3(0.66, 0.74, 0.84);
         float luma = dot(col, vec3(0.299, 0.587, 0.114));
@@ -1139,12 +1099,10 @@ mod painter {
         vec3 grade = mix(warm_tint, bleak_tint, u_darkness);
         col = desat * grade * (0.55 + u_warmth * 0.55);
 
-        // Drifting Highland atmospheric mist
         float mist_wave = 0.5 + 0.5 * sin(uv.x * 7.0 + u_time * 0.35 + sin(uv.y * 5.0));
         vec3 mist_col = mix(vec3(0.78, 0.82, 0.76), vec3(0.42, 0.48, 0.54), u_darkness);
         col = mix(col, mist_col, u_mist * 0.28 * (0.5 + 0.5 * mist_wave));
 
-        // Soft painterly vignette
         vec2 dv = uv - vec2(0.5);
         float vig = 1.0 - dot(dv, dv) * (0.45 + u_darkness * 0.35);
         col *= clamp(vig, 0.35, 1.05);
@@ -1178,7 +1136,6 @@ mod painter {
         let mut img = Image::gen_image_color(size, size, Color::new(base[0], base[1], base[2], 1.0));
         let mut rng = Rng::new(seed);
 
-        // Base pigment wash via fBm
         for y in 0..size {
             for x in 0..size {
                 let n = fbm2d(seed, x as f32 * 0.08, y as f32 * 0.08, 3);
@@ -1189,7 +1146,6 @@ mod painter {
             }
         }
 
-        // Layered impasto oil brushstrokes
         for _ in 0..stroke_count {
             let cx = rng.range_f32(0.0, size as f32);
             let cy = rng.range_f32(0.0, size as f32);
@@ -1382,7 +1338,6 @@ impl Universe {
             next_id: 100,
         };
 
-        // 1. Player: Callum MacRae (ID 1)
         u.entities.push(Entity {
             id: 1,
             owner_player: Some(PlayerId(1)),
@@ -1414,7 +1369,6 @@ impl Universe {
             mind: None,
         });
 
-        // 2. Companion Horse: Bramble (ID 2)
         u.entities.push(Entity {
             id: 2,
             owner_player: Some(PlayerId(1)),
@@ -1461,7 +1415,6 @@ impl Universe {
             }),
         });
 
-        // 3. Gibbet on Wade's Road with two hanged Highlanders suspended on live physics hemp ropes!
         let gibbet_x = 12.0;
         let gibbet_y = -1.5;
         for (idx, (cname, ox)) in [("Ewan of Glen Nevis", -0.85), ("Hamish MacDonald", 0.85)]
@@ -1511,7 +1464,6 @@ impl Universe {
             });
         }
 
-        // 4. Clachan Villagers with real schedules, hearths, and memory rings
         let villagers = [
             ("Mairi the Weaver", Vec2::new(-8.0, 15.8), Vec2::new(-10.5, 11.2)),
             ("Duncan the Smith", Vec2::new(-6.0, 11.0), Vec2::new(-10.0, 10.5)),
@@ -1566,7 +1518,6 @@ impl Universe {
             });
         }
 
-        // 5. Fort William Redcoat Patrols marching Wade's Road
         let patrols = [
             ("Corporal Hargreaves", Vec2::new(11.0, -16.0), Vec2::new(11.0, 14.0)),
             ("Private Finch", Vec2::new(13.2, -17.5), Vec2::new(13.2, 12.5)),
@@ -1624,7 +1575,6 @@ impl Universe {
             });
         }
 
-        // 6. Wild Highland Red Deer
         for i in 0..3 {
             let dp = Vec2::new(-18.0 + i as f32 * 4.5, 22.0 + (i as f32 * 2.1).sin() * 3.0);
             u.entities.push(Entity {
@@ -1674,7 +1624,6 @@ impl Universe {
             });
         }
 
-        // 7. Deterministic Scots Pine groves avoiding buildings, water & road
         for _ in 0..115 {
             let tx = rng.range_f32(-36.0, 42.0);
             let ty = rng.range_f32(-36.0, 36.0);
@@ -1783,7 +1732,6 @@ impl Universe {
                 AudioBank::play(&sfx.steel, 0.35);
                 self.emit_sound(p_pos, 52.0, false, false);
 
-                // LOOP 1: Check universal physics constraints (hemp gibbet ropes!)
                 let mut snapped_indices = Vec::new();
                 for (ci, c) in self.constraints.iter().enumerate() {
                     if !c.intact {
@@ -1791,7 +1739,6 @@ impl Universe {
                     }
                     let d = p_pos.distance(c.anchor);
                     if d < 2.6 {
-                        // Steel shear impulse scales with sharpness
                         let steel_shear_n = 260.0 * (0.4 + sharp * 0.8);
                         if steel_shear_n > c.max_shear_n {
                             snapped_indices.push(ci);
@@ -1807,15 +1754,15 @@ impl Universe {
                     if let Some(ei) = self.entity_index(eid) {
                         self.entities[ei].z = 0.0;
                         self.entities[ei].vel = Vec2::new(self.rng.range_f32(-0.8, 0.8), 1.4);
+                        let cname = self.entities[ei].name.clone();
                         self.toast(format!(
                             "Severed the hemp rope — {} dropped heavily into the wet grass. [E] Carry, [B] Bury.",
-                            self.entities[ei].name
+                            cname
                         ));
                     }
                     self.entities[pi].blade_sharpness = (self.entities[pi].blade_sharpness - 0.02).max(0.1);
                 }
 
-                // Check melee strike against living hostiles / targets
                 let mut hits = Vec::new();
                 for i in 0..self.entities.len() {
                     if i == pi || !self.entities[i].alive || self.entities[i].kind == EntityKind::Mount {
@@ -1840,13 +1787,17 @@ impl Universe {
                     if self.entities[ti].health <= 0.0 && self.cfg.lethality_mult > 0.0 {
                         self.entities[ti].alive = false;
                         self.entities[ti].kind = EntityKind::Corpse;
-                        self.toast(format!("{} fell.", self.entities[ti].name));
-                    } else if let Some(mind) = &mut self.entities[ti].mind {
-                        if self.entities[ti].kind == EntityKind::Redcoat {
-                            mind.goal = AiGoal::Engage;
-                            mind.awareness = 1.0;
-                        } else {
-                            mind.goal = AiGoal::Flee;
+                        let ename = self.entities[ti].name.clone();
+                        self.toast(format!("{} fell.", ename));
+                    } else {
+                        let is_redcoat = self.entities[ti].kind == EntityKind::Redcoat;
+                        if let Some(mind) = &mut self.entities[ti].mind {
+                            if is_redcoat {
+                                mind.goal = AiGoal::Engage;
+                                mind.awareness = 1.0;
+                            } else {
+                                mind.goal = AiGoal::Flee;
+                            }
                         }
                     }
                 }
@@ -1862,7 +1813,6 @@ impl Universe {
                 self.entities[pi].facing = dir;
                 let p_pos = self.entities[pi].pos;
 
-                // LOOP 2: Real black-powder humidity misfire physics!
                 let misfire_chance =
                     (self.entities[pi].powder_wetness * self.cfg.ignition_humidity_penalty).clamp(0.0, 0.92);
                 if self.rng.next_f32() < misfire_chance {
@@ -1873,7 +1823,6 @@ impl Universe {
 
                 AudioBank::play(&sfx.gunshot, 0.65);
                 self.emit_sound(p_pos, 98.0, true, false);
-                // Thick black-powder smoke cloud pushed by wind
                 for _ in 0..8 {
                     self.smoke.push(SmokePuff {
                         pos: p_pos + dir * 0.9,
@@ -1885,7 +1834,6 @@ impl Universe {
                     });
                 }
 
-                // Ballistic raycast with wind drift
                 let wind_deflect = Vec2::new(-dir.y, dir.x) * (self.weather.wind_vec.length() * 0.008);
                 let shot_dir = (dir + wind_deflect).normalize_or_zero();
                 let mut hit_target = None;
@@ -1912,7 +1860,8 @@ impl Universe {
                         if self.entities[ti].health <= 0.0 {
                             self.entities[ti].alive = false;
                             self.entities[ti].kind = EntityKind::Corpse;
-                            self.toast(format!("Musket ball dropped {}.", self.entities[ti].name));
+                            let ename = self.entities[ti].name.clone();
+                            self.toast(format!("Musket ball dropped {}.", ename));
                         }
                     }
                 }
@@ -1922,23 +1871,22 @@ impl Universe {
                 let Some(pi) = self.player_index(player) else { return; };
                 let p_pos = self.entities[pi].pos;
 
-                // 1. Dismount if mounted
                 if self.entities[pi].mounted_id.is_some() {
                     self.entities[pi].mounted_id = None;
                     self.toast("Dismounted Bramble.");
                     return;
                 }
 
-                // 2. Drop carried corpse if carrying one
                 if let Some(cid) = self.entities[pi].carrying_id.take() {
+                    let p_face = self.entities[pi].facing;
                     if let Some(ci) = self.entity_index(cid) {
-                        self.entities[ci].pos = p_pos + self.entities[pi].facing * 1.1;
-                        self.toast(format!("Laid {} gently on the ground.", self.entities[ci].name));
+                        self.entities[ci].pos = p_pos + p_face * 1.1;
+                        let cname = self.entities[ci].name.clone();
+                        self.toast(format!("Laid {} gently on the ground.", cname));
                     }
                     return;
                 }
 
-                // 3. Find closest interactive entity (Mount, Villager, Unburied Freed Corpse)
                 let mut best: Option<(usize, f32)> = None;
                 for i in 0..self.entities.len() {
                     if i == pi || self.entities[i].buried {
@@ -1968,6 +1916,7 @@ impl Universe {
                         }
                         EntityKind::Corpse => {
                             let cid = self.entities[ti].id;
+                            let cname = self.entities[ti].name.clone();
                             let still_hung = self.constraints.iter().any(|c| c.entity_id == cid && c.intact);
                             if still_hung {
                                 self.toast("Hemp rope holds them aloft — slash the rope with steel [Click/Space] first.");
@@ -1975,7 +1924,7 @@ impl Universe {
                                 self.entities[pi].carrying_id = Some(cid);
                                 self.toast(format!(
                                     "Lifted {} onto your shoulder. Carry off the road and press [B] to build a burial cairn.",
-                                    self.entities[ti].name
+                                    cname
                                 ));
                             }
                         }
@@ -2002,14 +1951,20 @@ impl Universe {
                     return;
                 }
 
-                // 4. Stoke nearby cottage hearth
+                let mut hearth_msg: Option<&str> = None;
                 for b in &mut self.buildings {
                     if b.hearth_pos.distance(p_pos) < 2.5 {
                         b.hearth_lit = !b.hearth_lit;
-                        let st = if b.hearth_lit { "Stoked the peat hearth." } else { "Banked the hearth embers." };
-                        self.toast(st);
-                        return;
+                        hearth_msg = Some(if b.hearth_lit {
+                            "Stoked the peat hearth."
+                        } else {
+                            "Banked the hearth embers."
+                        });
+                        break;
                     }
+                }
+                if let Some(msg) = hearth_msg {
+                    self.toast(msg);
                 }
             }
 
@@ -2060,7 +2015,6 @@ impl Universe {
                 });
 
                 self.ledger.push(DeltaEntry::CorpseBuried(cid, bury_pos.x, bury_pos.y));
-                // LOOP 7: Quiet witness & gossip ripple across the clachan
                 for i in 0..self.entities.len() {
                     if self.entities[i].kind == EntityKind::Villager {
                         let d = self.entities[i].pos.distance(bury_pos);
@@ -2137,7 +2091,7 @@ impl Universe {
                     material: MaterialId::Peat,
                     wetness: 0.0,
                     temp_k: 720.0,
-                    health: 60.0, // fuel seconds
+                    health: 60.0,
                     max_health: 60.0,
                     stamina: 0.0,
                     bleed_rate: 0.0,
@@ -2174,7 +2128,6 @@ impl Universe {
             .map(|i| self.entities[i].pos)
             .unwrap_or(Vec2::ZERO);
 
-        // Smooth roof fade for enterable buildings + chimney smoke
         for b in &mut self.buildings {
             let inside = b.contains(player_pos);
             let target_alpha = if inside { 0.0 } else { 1.0 };
@@ -2191,7 +2144,6 @@ impl Universe {
             }
         }
 
-        // Collect active heat sources (lit building hearths + campfires)
         let mut heat_sources: Vec<Vec2> = self
             .buildings
             .iter()
@@ -2204,7 +2156,6 @@ impl Universe {
             }
         }
 
-        // Acoustic wave expansion + NPC hearing
         for sw in &mut self.sound_waves {
             sw.age += dt;
             sw.radius = (sw.radius + dt * 28.0).min(sw.max_radius);
@@ -2217,7 +2168,6 @@ impl Universe {
             .collect();
         self.sound_waves.retain(|w| w.age < 1.1);
 
-        // Smoke & traces update
         for sp in &mut self.smoke {
             sp.age += dt;
             sp.pos += (sp.vel + self.weather.wind_vec * 0.15) * dt;
@@ -2229,7 +2179,6 @@ impl Universe {
         }
         self.traces.retain(|t| t.age < t.max_age);
 
-        // Pre-compute entity physics & causal loops
         let mut alert_events: Vec<(String, DialectId, bool)> = Vec::new();
         let mut player_hit_dmg = 0.0f32;
         let mut player_knock = Vec2::ZERO;
@@ -2237,7 +2186,8 @@ impl Universe {
         for i in 0..self.entities.len() {
             let kind = self.entities[i].kind;
             if kind == EntityKind::Campfire {
-                if self.weather.rain_intensity > 0.7 && !self.is_sheltered(self.entities[i].pos) {
+                let cpos = self.entities[i].pos;
+                if self.weather.rain_intensity > 0.7 && !self.is_sheltered(cpos) {
                     self.entities[i].health -= dt * 8.0;
                 } else {
                     self.entities[i].health -= dt * 0.4;
@@ -2246,7 +2196,7 @@ impl Universe {
                     self.entities[i].alive = false;
                 } else if self.rng.next_f32() < dt * 4.0 {
                     self.smoke.push(SmokePuff {
-                        pos: self.entities[i].pos,
+                        pos: cpos,
                         vel: self.weather.wind_vec * 0.3 + Vec2::new(0.0, -0.8),
                         radius: 0.35,
                         age: 0.0,
@@ -2264,7 +2214,6 @@ impl Universe {
                 self.entities[i].recoil_timer = (self.entities[i].recoil_timer - dt).max(0.0);
             }
 
-            // LOOP 2: Wetness, Black Powder Fouling, and Thermal Shelter
             let pos = self.entities[i].pos;
             let sheltered = self.is_sheltered(pos);
             let near_fire = heat_sources.iter().any(|h| h.distance(pos) < 3.6);
@@ -2281,7 +2230,6 @@ impl Universe {
             }
 
             if self.entities[i].alive {
-                // Core body temperature equilibrium
                 let heat_gain = if near_fire { 1.2 } else if sheltered { 0.25 } else { 0.0 };
                 let chill = if !sheltered {
                     (290.0 - self.weather.ambient_temp_k).max(0.0)
@@ -2295,7 +2243,6 @@ impl Universe {
                     self.entities[i].stamina = (self.entities[i].stamina - 4.0 * dt).max(0.0);
                 }
 
-                // LOOP 5: Bleeding & Stamina recovery
                 if self.entities[i].bleed_rate > 0.0 {
                     self.entities[i].health -= self.entities[i].bleed_rate * dt;
                     if self.rng.next_f32() < dt * 2.2 {
@@ -2310,11 +2257,13 @@ impl Universe {
                 self.entities[i].stamina = (self.entities[i].stamina + 9.5 * dt).min(100.0);
             }
 
-            // AI brains (Mount, Villager, Redcoat, Deer)
             if self.entities[i].alive && kind != EntityKind::Player {
                 let mut desired_v = Vec2::ZERO;
                 let mut new_goal = None;
                 let mut speak_alert = None;
+                let mut did_swing = false;
+                let entity_name = self.entities[i].name.clone();
+                let los_to_player = !self.buildings.iter().any(|bld| bld.blocks_segment(pos, player_pos));
 
                 if let Some(mind) = &mut self.entities[i].mind {
                     if mind.speak_cooldown > 0.0 {
@@ -2324,7 +2273,6 @@ impl Universe {
                         mind.attack_cooldown -= dt;
                     }
 
-                    // Hear loud sounds
                     for (wpos, wrad, hostiles_care) in &active_waves {
                         if pos.distance(*wpos) < *wrad {
                             if kind == EntityKind::Redcoat && *hostiles_care {
@@ -2375,7 +2323,6 @@ impl Universe {
                             }
                         }
                         EntityKind::Redcoat => {
-                            // LOOP 7: Discover severed gibbet ropes organically via vision cone!
                             let vis_range = self.cfg.vision_range_m * (1.0 - self.weather.mist_intensity * 0.55);
                             for c in &mut self.constraints {
                                 if !c.intact && !c.discovered_by_patrol && pos.distance(c.anchor) < vis_range * 0.65 {
@@ -2383,13 +2330,13 @@ impl Universe {
                                     mind.awareness = 1.0;
                                     self.clans[1].alert_level = (self.clans[1].alert_level + 0.5).min(1.0);
                                     self.ledger.push(DeltaEntry::GarrisonAlert(self.clans[1].alert_level));
-                                    speak_alert = Some((self.entities[i].name.clone(), mind.dialect, true));
+                                    speak_alert = Some((entity_name.clone(), mind.dialect, true));
                                     new_goal = Some(AiGoal::Investigate(c.anchor));
                                 }
                             }
 
                             let dist_p = pos.distance(player_pos);
-                            if dist_p < vis_range && self.has_line_of_sight(pos, player_pos) {
+                            if dist_p < vis_range && los_to_player {
                                 let alert_push = if self.clans[1].alert_level > 0.3 { 0.45 } else { 0.0 };
                                 if alert_push > 0.0 || mind.goal == AiGoal::Engage {
                                     mind.awareness = (mind.awareness + dt * 0.65).min(1.0);
@@ -2397,7 +2344,7 @@ impl Universe {
                                         mind.goal = AiGoal::Engage;
                                         if mind.speak_cooldown <= 0.0 {
                                             mind.speak_cooldown = 7.0;
-                                            speak_alert = Some((self.entities[i].name.clone(), mind.dialect, false));
+                                            speak_alert = Some((entity_name.clone(), mind.dialect, false));
                                         }
                                     }
                                 }
@@ -2424,7 +2371,7 @@ impl Universe {
                                         desired_v = (player_pos - pos).normalize_or_zero() * 4.1;
                                     } else if mind.attack_cooldown <= 0.0 {
                                         mind.attack_cooldown = 1.15;
-                                        self.entities[i].swing_timer = 0.25;
+                                        did_swing = true;
                                         player_hit_dmg += 16.0 * self.cfg.lethality_mult;
                                         player_knock += (player_pos - pos).normalize_or_zero()
                                             * (6.5 * self.cfg.knockback_mult);
@@ -2442,6 +2389,9 @@ impl Universe {
                         mind.goal = g;
                     }
                 }
+                if did_swing {
+                    self.entities[i].swing_timer = 0.25;
+                }
                 if let Some(ev) = speak_alert {
                     alert_events.push(ev);
                 }
@@ -2452,11 +2402,9 @@ impl Universe {
                 }
             }
 
-            // Integrate motion + wall collisions + terrain bounds + mud footprints
             let prev = self.entities[i].pos;
             let mut next = prev + self.entities[i].vel * dt;
 
-            // Keep out of deep loch water (bounce off shore in Party Chaos!)
             let (_, tk) = sample_terrain(self.cfg.world_seed, next.x, next.y);
             if tk == TerrainKind::LochWater {
                 next = prev;
@@ -2470,12 +2418,10 @@ impl Universe {
             }
             self.entities[i].pos = next;
 
-            // Friction damping on corpses / idle bodies
             if !self.entities[i].alive {
                 self.entities[i].vel *= (1.0 - 6.0 * self.cfg.global_friction_mult * dt).max(0.0);
             }
 
-            // LOOP 3: Mud & hoof traces
             let step_dist = next.distance(prev);
             self.entities[i].trace_accum += step_dist;
             if self.entities[i].trace_accum > 1.35 && (tk == TerrainKind::MudRoad || tk == TerrainKind::PeatBog || self.weather.rain_intensity > 0.2) {
@@ -2494,7 +2440,6 @@ impl Universe {
             }
         }
 
-        // Sync mounted horse & carried corpse positions cleanly
         if let Some(pi) = self.player_index(PlayerId(1)) {
             let ppos = self.entities[pi].pos;
             let pface = self.entities[pi].facing;
@@ -2518,14 +2463,13 @@ impl Universe {
                     self.entities[pi].blood_stain = (self.entities[pi].blood_stain + 0.25).min(1.0);
                 }
             }
-            // Defeat consequence hook (1744 Captivity vs Party Bounce)
             if self.entities[pi].health <= 0.0 {
                 match self.cfg.defeat_mode {
                     DefeatMode::CaptivityTimeSkip => {
                         self.weather.day_count += self.cfg.defeat_time_skip_days;
                         self.entities[pi].health = 65.0;
                         self.entities[pi].bleed_rate = 0.0;
-                        self.entities[pi].pos = Vec2::new(-9.0, -4.5); // Wakes recovering in bothy
+                        self.entities[pi].pos = Vec2::new(-9.0, -4.5);
                         self.entities[pi].mounted_id = None;
                         self.entities[pi].carrying_id = None;
                         let scar = format!("Day {} Garrison Clash Scar", self.weather.day_count);
@@ -2542,7 +2486,6 @@ impl Universe {
             }
         }
 
-        // Emit any Redcoat alerts
         for (name, dialect, found_rope) in alert_events {
             self.utterances.push(compose_redcoat_alert(&name, found_rope, dialect));
             AudioBank::play(&sfx.voice_bark, 0.5);
@@ -2555,9 +2498,12 @@ impl Universe {
         for e in &ledger.entries {
             match e {
                 DeltaEntry::RopeSevered(cid) => {
-                    if let Some(c) = self.constraints.iter_mut().find(|c| c.id == *cid) {
+                    let target_eid = self.constraints.iter_mut().find(|c| c.id == *cid).map(|c| {
                         c.intact = false;
-                        if let Some(ei) = self.entity_index(c.entity_id) {
+                        c.entity_id
+                    });
+                    if let Some(eid) = target_eid {
+                        if let Some(ei) = self.entity_index(eid) {
                             self.entities[ei].z = 0.0;
                         }
                     }
@@ -2622,7 +2568,6 @@ fn draw_world(u: &Universe, atlas: &PaintedAtlas, cam: Vec2, view_w_m: f32, view
     let min_ty = ((cam.y - view_h_m * 0.6) / tile_m).floor() as i32;
     let max_ty = ((cam.y + view_h_m * 0.6) / tile_m).ceil() as i32;
 
-    // 1. Oil-painted terrain tiles
     for ty in min_ty..=max_ty {
         for tx in min_tx..=max_tx {
             let wx = tx as f32 * tile_m;
@@ -2661,7 +2606,6 @@ fn draw_world(u: &Universe, atlas: &PaintedAtlas, cam: Vec2, view_w_m: f32, view
         }
     }
 
-    // 2. Surface traces (mud footprints, hoofprints, blood drops)
     for tr in &u.traces {
         let a = (1.0 - tr.age / tr.max_age).clamp(0.0, 1.0) * 0.65;
         let (col, r) = match tr.kind {
@@ -2673,7 +2617,6 @@ fn draw_world(u: &Universe, atlas: &PaintedAtlas, cam: Vec2, view_w_m: f32, view
         draw_circle(tr.pos.x, tr.pos.y, r, col);
     }
 
-    // 3. Acoustic ripples
     for sw in &u.sound_waves {
         let a = (1.0 - sw.age / 1.1).clamp(0.0, 1.0) * 0.45;
         let col = if sw.whistle {
@@ -2686,10 +2629,8 @@ fn draw_world(u: &Universe, atlas: &PaintedAtlas, cam: Vec2, view_w_m: f32, view
         draw_circle_lines(sw.pos.x, sw.pos.y, sw.radius, 0.08, col);
     }
 
-    // 4. Enterable stone buildings (floors, hearths, masonry walls)
     let shadow_off = u.weather.sun_dir * 0.75;
     for b in &u.buildings {
-        // Directional cast shadow
         draw_rectangle(
             b.x + shadow_off.x,
             b.y + shadow_off.y,
@@ -2697,7 +2638,6 @@ fn draw_world(u: &Universe, atlas: &PaintedAtlas, cam: Vec2, view_w_m: f32, view
             b.h,
             Color::new(0.05, 0.06, 0.08, 0.34 * u.weather.sun_warmth),
         );
-        // Interior floor
         draw_texture_ex(
             &atlas.floor,
             b.x,
@@ -2708,11 +2648,8 @@ fn draw_world(u: &Universe, atlas: &PaintedAtlas, cam: Vec2, view_w_m: f32, view
                 ..Default::default()
             },
         );
-        // Stone walls
         draw_rectangle_lines(b.x, b.y, b.w, b.h, 0.45, Color::new(0.36, 0.35, 0.33, 1.0));
-        // Open doorway threshold
         draw_rectangle(b.door_pos.x - 0.8, b.y + b.h - 0.3, 1.6, 0.55, Color::new(0.45, 0.32, 0.18, 1.0));
-        // Warm crackling peat hearth
         draw_circle(b.hearth_pos.x, b.hearth_pos.y, 0.72, Color::new(0.24, 0.22, 0.21, 1.0));
         if b.hearth_lit {
             let flick = 0.85 + (u.time * 14.0 + b.id as f32).sin() * 0.15;
@@ -2721,7 +2658,6 @@ fn draw_world(u: &Universe, atlas: &PaintedAtlas, cam: Vec2, view_w_m: f32, view
         }
     }
 
-    // 5. Gibbet timber frame on Wade's Road
     let gx = 12.0;
     let gy = -1.5;
     draw_rectangle(gx - 2.2 + shadow_off.x, gy - 0.3 + shadow_off.y, 4.4, 0.45, Color::new(0.05, 0.05, 0.07, 0.35));
@@ -2729,17 +2665,14 @@ fn draw_world(u: &Universe, atlas: &PaintedAtlas, cam: Vec2, view_w_m: f32, view
     draw_rectangle(gx + 1.75, gy - 2.2, 0.35, 2.5, Color::new(0.30, 0.21, 0.14, 1.0));
     draw_rectangle(gx - 2.25, gy - 2.25, 4.5, 0.38, Color::new(0.34, 0.24, 0.16, 1.0));
 
-    // Live physics hemp ropes
     for c in &u.constraints {
         if c.intact {
             draw_line(c.anchor.x, c.anchor.y - 2.0, c.anchor.x, c.anchor.y + 0.1, 0.09, Color::new(0.76, 0.66, 0.44, 1.0));
         } else {
-            // Cut hemp stub left hanging — visible physical evidence!
             draw_line(c.anchor.x, c.anchor.y - 2.0, c.anchor.x + 0.08, c.anchor.y - 1.35, 0.09, Color::new(0.76, 0.66, 0.44, 0.9));
         }
     }
 
-    // 6. Entities sorted by Y for natural 3/4 depth
     let mut order: Vec<usize> = (0..u.entities.len()).collect();
     order.sort_by(|&a, &b| u.entities[a].pos.y.partial_cmp(&u.entities[b].pos.y).unwrap_or(std::cmp::Ordering::Equal));
 
@@ -2749,7 +2682,6 @@ fn draw_world(u: &Universe, atlas: &PaintedAtlas, cam: Vec2, view_w_m: f32, view
             continue;
         }
         let p = e.pos;
-        // Directional shadow
         let sh_rad = match e.kind {
             EntityKind::Mount => 0.95,
             EntityKind::Cairn => 0.85,
@@ -2764,7 +2696,6 @@ fn draw_world(u: &Universe, atlas: &PaintedAtlas, cam: Vec2, view_w_m: f32, view
 
         match e.kind {
             EntityKind::Cairn => {
-                // Stacked Highland fieldstone memorial
                 draw_circle(p.x - 0.28, p.y + 0.12, 0.36, Color::new(0.46, 0.47, 0.45, 1.0));
                 draw_circle(p.x + 0.26, p.y + 0.14, 0.34, Color::new(0.40, 0.42, 0.41, 1.0));
                 draw_circle(p.x, p.y - 0.05, 0.38, Color::new(0.55, 0.56, 0.52, 1.0));
@@ -2777,12 +2708,10 @@ fn draw_world(u: &Universe, atlas: &PaintedAtlas, cam: Vec2, view_w_m: f32, view
                 draw_circle(p.x, p.y - 0.05, 0.32 * fl, Color::new(1.0, 0.68, 0.20, 0.95));
             }
             EntityKind::Mount => {
-                // Bramble — Highland dun horse
                 let dir = e.facing.normalize_or_zero();
                 draw_circle(p.x - dir.x * 0.35, p.y - dir.y * 0.2, 0.68, Color::new(0.47, 0.34, 0.22, 1.0));
                 draw_circle(p.x + dir.x * 0.35, p.y + dir.y * 0.2, 0.62, Color::new(0.52, 0.38, 0.24, 1.0));
                 draw_circle(p.x + dir.x * 0.85, p.y + dir.y * 0.55 - 0.25, 0.34, Color::new(0.38, 0.26, 0.17, 1.0));
-                // Saddlebags
                 draw_rectangle(p.x - 0.32, p.y - 0.28, 0.64, 0.42, Color::new(0.28, 0.18, 0.11, 1.0));
             }
             EntityKind::Deer => {
@@ -2801,16 +2730,12 @@ fn draw_world(u: &Universe, atlas: &PaintedAtlas, cam: Vec2, view_w_m: f32, view
                     EntityKind::Redcoat => (Color::new(0.74, 0.15, 0.14, 1.0), Color::new(0.92, 0.88, 0.78, 1.0)),
                     _ => (Color::new(0.38, 0.34, 0.27, 1.0), Color::new(0.24, 0.38, 0.34, 1.0)),
                 };
-                // Wool plaid / tunic
                 draw_circle(p.x, p.y + y_lift, 0.48, coat);
                 draw_line(p.x - 0.3, p.y - 0.25 + y_lift, p.x + 0.3, p.y + 0.25 + y_lift, 0.16, accent);
-                // Blood stain overlay
                 if e.blood_stain > 0.1 {
                     draw_circle(p.x + 0.12, p.y + 0.1 + y_lift, 0.22, Color::new(0.58, 0.05, 0.05, e.blood_stain * 0.8));
                 }
-                // Head
                 draw_circle(p.x, p.y - 0.46 + y_lift, 0.28, Color::new(0.84, 0.70, 0.58, 1.0));
-                // Redcoat tricorne hat or Highland bonnet
                 let hat = if e.kind == EntityKind::Redcoat {
                     Color::new(0.12, 0.12, 0.14, 1.0)
                 } else {
@@ -2818,13 +2743,11 @@ fn draw_world(u: &Universe, atlas: &PaintedAtlas, cam: Vec2, view_w_m: f32, view
                 };
                 draw_circle(p.x, p.y - 0.62 + y_lift, 0.24, hat);
 
-                // Steel blade swing arc
                 if e.swing_timer > 0.0 {
                     let tip = p + e.facing * 1.65;
                     draw_line(p.x, p.y + y_lift, tip.x, tip.y + y_lift, 0.12, Color::new(0.88, 0.92, 0.96, 0.95));
                 }
 
-                // Alert indicator over investigating/hostile Redcoats
                 if e.kind == EntityKind::Redcoat {
                     if let Some(m) = &e.mind {
                         if m.awareness > 0.25 {
@@ -2837,7 +2760,6 @@ fn draw_world(u: &Universe, atlas: &PaintedAtlas, cam: Vec2, view_w_m: f32, view
         }
     }
 
-    // 7. Cottage roofs (fade smoothly when Callum steps inside!)
     for b in &u.buildings {
         if b.roof_alpha > 0.02 {
             let tint = Color::new(1.0, 1.0, 1.0, b.roof_alpha);
@@ -2851,7 +2773,6 @@ fn draw_world(u: &Universe, atlas: &PaintedAtlas, cam: Vec2, view_w_m: f32, view
                     ..Default::default()
                 },
             );
-            // Roof ridge line
             draw_line(
                 b.x - 0.2,
                 b.y + b.h * 0.45,
@@ -2860,7 +2781,6 @@ fn draw_world(u: &Universe, atlas: &PaintedAtlas, cam: Vec2, view_w_m: f32, view
                 0.22,
                 Color::new(0.28, 0.21, 0.13, b.roof_alpha),
             );
-            // Stone chimney
             draw_rectangle(
                 b.hearth_pos.x - 0.45,
                 b.hearth_pos.y - 0.45,
@@ -2871,7 +2791,6 @@ fn draw_world(u: &Universe, atlas: &PaintedAtlas, cam: Vec2, view_w_m: f32, view
         }
     }
 
-    // 8. Painted Scots Pines
     for (tp, rad) in &u.trees {
         draw_circle(
             tp.x + shadow_off.x * 0.85,
@@ -2892,7 +2811,6 @@ fn draw_world(u: &Universe, atlas: &PaintedAtlas, cam: Vec2, view_w_m: f32, view
         );
     }
 
-    // 9. Smoke & hearth embers
     for sp in &u.smoke {
         let a = (1.0 - sp.age / sp.max_age).clamp(0.0, 1.0);
         let col = if sp.is_ember {
@@ -2903,7 +2821,6 @@ fn draw_world(u: &Universe, atlas: &PaintedAtlas, cam: Vec2, view_w_m: f32, view
         draw_circle(sp.pos.x, sp.pos.y, sp.radius, col);
     }
 
-    // 10. Driving Highland rain streaks
     if u.weather.rain_intensity > 0.06 {
         let drops = (u.weather.rain_intensity * 90.0) as usize;
         for i in 0..drops {
@@ -2925,7 +2842,6 @@ fn draw_hud_and_forge(u: &mut Universe, forge_open: &mut bool) {
     let sw = screen_width();
     let sh = screen_height();
 
-    // Top-left crisp Highland header
     draw_rectangle(14.0, 14.0, 340.0, 118.0, Color::new(0.09, 0.10, 0.09, 0.78));
     draw_rectangle_lines(14.0, 14.0, 340.0, 118.0, 1.5, Color::new(0.62, 0.54, 0.36, 0.8));
 
@@ -2955,7 +2871,6 @@ fn draw_hud_and_forge(u: &mut Universe, forge_open: &mut bool) {
         }
     }
 
-    // Bottom control strip
     draw_rectangle(14.0, sh - 38.0, sw - 28.0, 26.0, Color::new(0.08, 0.09, 0.08, 0.75));
     draw_text(
         "[WASD] Move  [Click/Space] Steel  [F] Flintlock  [E] Talk/Mount/Carry  [B] Bury Cairn  [H] Whistle Bramble  [C] Fire  [R] Bandage  [V] Whet  [TAB] Universe Forge  [F5/F9] Save/Load",
@@ -2965,7 +2880,6 @@ fn draw_hud_and_forge(u: &mut Universe, forge_open: &mut bool) {
         Color::new(0.84, 0.82, 0.76, 0.92),
     );
 
-    // Active NPC Dialogue Banner (Zero-LLM Highland Dialect)
     if let Some(utt) = u.utterances.last() {
         let bw = (sw - 120.0).min(860.0);
         let bx = (sw - bw) * 0.5;
@@ -2976,7 +2890,6 @@ fn draw_hud_and_forge(u: &mut Universe, forge_open: &mut bool) {
         draw_text(&utt.text, bx + 14.0, by + 48.0, 17.0, Color::new(0.93, 0.92, 0.88, 1.0));
     }
 
-    // Status toast
     if u.status_toast.1 > 0.0 {
         let tw = measure_text(&u.status_toast.0, None, 18, 1.0).width + 28.0;
         let tx = (sw - tw) * 0.5;
@@ -2984,7 +2897,6 @@ fn draw_hud_and_forge(u: &mut Universe, forge_open: &mut bool) {
         draw_text(&u.status_toast.0, tx + 14.0, 38.0, 18.0, Color::new(0.95, 0.90, 0.72, 1.0));
     }
 
-    // Live Universe Forge Panel (TAB)
     if *forge_open {
         let px = sw - 330.0;
         let py = 14.0;
@@ -2996,7 +2908,7 @@ fn draw_hud_and_forge(u: &mut Universe, forge_open: &mut bool) {
         let (mx, my) = mouse_position();
         let clicked = is_mouse_button_pressed(MouseButton::Left);
 
-        let mut btn = |label: &str, x: f32, y: f32, w: f32, h: f32| -> bool {
+        let btn = |label: &str, x: f32, y: f32, w: f32, h: f32| -> bool {
             let hov = mx >= x && mx <= x + w && my >= y && my <= y + h;
             draw_rectangle(x, y, w, h, if hov { Color::new(0.28, 0.34, 0.26, 1.0) } else { Color::new(0.18, 0.20, 0.22, 1.0) });
             draw_rectangle_lines(x, y, w, h, 1.0, Color::new(0.65, 0.60, 0.45, 0.8));
@@ -3004,7 +2916,6 @@ fn draw_hud_and_forge(u: &mut Universe, forge_open: &mut bool) {
             hov && clicked
         };
 
-        // Swap entire universe presets instantaneously!
         if btn("1744 Lochaber (Bright)", px + 14.0, py + 64.0, 288.0, 26.0) {
             *u = Universe::new(UniverseConfig::preset_1744_lochaber());
         }
@@ -3015,7 +2926,6 @@ fn draw_hud_and_forge(u: &mut Universe, forge_open: &mut bool) {
             *u = Universe::new(UniverseConfig::preset_party_chaos());
         }
 
-        // Real-time parametric law knobs
         let rows: [(&str, f32); 5] = [
             ("Era Darkness", u.cfg.era_darkness),
             ("Rain Probability", u.cfg.rain_probability),
@@ -3070,7 +2980,7 @@ async fn main() {
     let sfx = AudioBank::synthesize().await;
     let mut universe = Universe::new(UniverseConfig::preset_1744_lochaber());
     let mut forge_open = false;
-    let mut zoom_m = 22.0f32; // Vertical meters visible on screen
+    let mut zoom_m = 22.0f32;
 
     let mut rt_w = screen_width().max(64.0) as u32;
     let mut rt_h = screen_height().max(64.0) as u32;
@@ -3117,7 +3027,6 @@ async fn main() {
             }
         }
 
-        // Translate player controls into multiplayer-ready CommandPackets
         let mut dir = Vec2::ZERO;
         if is_key_down(KeyCode::W) || is_key_down(KeyCode::Up) { dir.y -= 1.0; }
         if is_key_down(KeyCode::S) || is_key_down(KeyCode::Down) { dir.y += 1.0; }
@@ -3167,7 +3076,6 @@ async fn main() {
             universe.apply_command(CommandPacket::BuildCampfire { player: PlayerId(1) }, &sfx);
         }
 
-        // Fixed 60Hz deterministic simulation loop
         accum = (accum + get_frame_time().min(0.08)).min(0.16);
         while accum >= fixed_dt {
             universe.step(fixed_dt, &sfx);
@@ -3178,7 +3086,6 @@ async fn main() {
             cam = cam.lerp(universe.entities[pi].pos, (get_frame_time() * 7.0).min(1.0));
         }
 
-        // Pass 1: Render 3/4 top-down painted world into offscreen RenderTarget
         set_camera(&Camera2D {
             target: cam,
             zoom: vec2(2.0 / view_w_m, 2.0 / view_h_m),
@@ -3188,7 +3095,6 @@ async fn main() {
         clear_background(Color::new(0.14, 0.24, 0.28, 1.0));
         draw_world(&universe, &atlas, cam, view_w_m, view_h_m);
 
-        // Pass 2: Blit through the GLSL Oil-Painting, Sun-Warmth & Era-Grading Shader
         set_default_camera();
         clear_background(BLACK);
         atlas.post_mat.set_uniform("u_time", universe.time);
@@ -3211,7 +3117,6 @@ async fn main() {
         );
         gl_use_default_material();
 
-        // Pass 3: Crisp HUD + Live Universe Forge
         draw_hud_and_forge(&mut universe, &mut forge_open);
 
         next_frame().await;
