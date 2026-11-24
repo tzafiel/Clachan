@@ -1,7 +1,9 @@
 use crate::config::UniverseConfig;
-use crate::entities::{AiGoal, EntityKind, PlayerId};
+use crate::entities::{AiGoal, Entity, EntityKind, PlayerId};
 use crate::sim::Universe;
-use crate::world::{fbm2d, sample_terrain, Rng, TerrainKind, TraceKind};
+use crate::world::{
+    fbm2d, hash2d, sample_terrain, BuildingRecord, Location, PropKind, Rng, TerrainKind, TraceKind,
+};
 use macroquad::prelude::*;
 
 pub const VERT_SHADER: &str = r#"#version 100
@@ -39,27 +41,27 @@ void main() {
     vec2 px = vec2(1.0 / max(u_res_x, 1.0), 1.0 / max(u_res_y, 1.0));
 
     vec4 c0 = texture2D(Texture, uv);
-    vec4 c1 = texture2D(Texture, uv + vec2(px.x * 1.4, px.y * 0.6));
-    vec4 c2 = texture2D(Texture, uv - vec2(px.x * 0.9, px.y * 1.2));
-    vec3 col = (c0.rgb * 0.62 + c1.rgb * 0.20 + c2.rgb * 0.18);
+    vec4 c1 = texture2D(Texture, uv + vec2(px.x * 1.3, px.y * 0.5));
+    vec4 c2 = texture2D(Texture, uv - vec2(px.x * 0.8, px.y * 1.1));
+    vec3 col = (c0.rgb * 0.66 + c1.rgb * 0.18 + c2.rgb * 0.16);
 
-    float weave = sin(uv.x * u_res_x * 0.75) * sin(uv.y * u_res_y * 0.75) * 0.018;
-    float grain = (hash(floor(uv * vec2(u_res_x, u_res_y) * 0.5)) - 0.5) * 0.025;
+    float weave = sin(uv.x * u_res_x * 0.75) * sin(uv.y * u_res_y * 0.75) * 0.014;
+    float grain = (hash(floor(uv * vec2(u_res_x, u_res_y) * 0.5)) - 0.5) * 0.020;
     col += vec3(weave + grain);
 
-    vec3 warm_tint = vec3(1.08, 1.02, 0.90);
-    vec3 bleak_tint = vec3(0.66, 0.74, 0.84);
+    vec3 warm_tint = vec3(1.07, 1.02, 0.91);
+    vec3 bleak_tint = vec3(0.68, 0.75, 0.85);
     float luma = dot(col, vec3(0.299, 0.587, 0.114));
-    vec3 desat = mix(col, vec3(luma), u_darkness * 0.52);
+    vec3 desat = mix(col, vec3(luma), u_darkness * 0.50);
     vec3 grade = mix(warm_tint, bleak_tint, u_darkness);
-    col = desat * grade * (0.55 + u_warmth * 0.55);
+    col = desat * grade * (0.58 + u_warmth * 0.50);
 
     float mist_wave = 0.5 + 0.5 * sin(uv.x * 7.0 + u_time * 0.35 + sin(uv.y * 5.0));
     vec3 mist_col = mix(vec3(0.78, 0.82, 0.76), vec3(0.42, 0.48, 0.54), u_darkness);
-    col = mix(col, mist_col, u_mist * 0.28 * (0.5 + 0.5 * mist_wave));
+    col = mix(col, mist_col, u_mist * 0.26 * (0.5 + 0.5 * mist_wave));
 
     vec2 dv = uv - vec2(0.5);
-    float vig = 1.0 - dot(dv, dv) * (0.45 + u_darkness * 0.35);
+    float vig = 1.0 - dot(dv, dv) * (0.42 + u_darkness * 0.32);
     col *= clamp(vig, 0.35, 1.05);
 
     gl_FragColor = vec4(col, 1.0) * color;
@@ -75,6 +77,7 @@ pub struct PaintedAtlas {
     pub water: Texture2D,
     pub roof: Texture2D,
     pub floor: Texture2D,
+    pub stone_wall: Texture2D,
     pub pine: Texture2D,
     pub post_mat: Material,
 }
@@ -105,7 +108,7 @@ fn paint_tile(
         let cx = rng.range_f32(0.0, size as f32);
         let cy = rng.range_f32(0.0, size as f32);
         let len = if streaky { rng.range_f32(7.0, 16.0) } else { rng.range_f32(4.0, 10.0) };
-        let ang = if streaky { rng.range_f32(-0.25, 0.25) } else { rng.range_f32(-0.9, 0.9) };
+        let ang = if streaky { rng.range_f32(-0.22, 0.22) } else { rng.range_f32(-0.9, 0.9) };
         let pick = rng.next_f32();
         let c = if pick < 0.5 { accent } else if pick < 0.85 { base } else { highlight };
         let bright = rng.range_f32(0.86, 1.15);
@@ -126,6 +129,31 @@ fn paint_tile(
         }
     }
 
+    let tex = Texture2D::from_image(&img);
+    tex.set_filter(FilterMode::Linear);
+    tex
+}
+
+fn paint_masonry(size: u16) -> Texture2D {
+    let mut img = Image::gen_image_color(size, size, Color::new(0.24, 0.23, 0.21, 1.0));
+    let mut rng = Rng::new(4109);
+    let rows = 5;
+    let rh = size / rows;
+    for r in 0..rows {
+        let mut x = if r % 2 == 0 { 0 } else { 6 };
+        while x < size {
+            let bw = (10 + (rng.next_u64() % 9) as u16).min(size - x);
+            let shade = rng.range_f32(0.36, 0.52);
+            let warm = rng.range_f32(-0.02, 0.03);
+            let col = Color::new(shade + warm, shade, shade - warm * 0.5, 1.0);
+            for py in (r * rh + 1)..((r + 1) * rh).saturating_sub(1).min(size) {
+                for px in (x + 1)..(x + bw).saturating_sub(1).min(size) {
+                    img.set_pixel(px as u32, py as u32, col);
+                }
+            }
+            x += bw;
+        }
+    }
     let tex = Texture2D::from_image(&img);
     tex.set_filter(FilterMode::Linear);
     tex
@@ -192,20 +220,206 @@ impl PaintedAtlas {
             granite: paint_tile(64, 505, [0.43, 0.44, 0.42], [0.32, 0.34, 0.35], [0.62, 0.62, 0.58], 300, false),
             water: paint_tile(64, 606, [0.15, 0.30, 0.38], [0.20, 0.39, 0.47], [0.46, 0.64, 0.68], 300, true),
             roof: paint_tile(64, 707, [0.48, 0.38, 0.23], [0.36, 0.28, 0.16], [0.64, 0.53, 0.34], 380, true),
-            floor: paint_tile(64, 808, [0.33, 0.26, 0.19], [0.25, 0.19, 0.14], [0.43, 0.35, 0.26], 240, true),
+            floor: paint_tile(64, 808, [0.38, 0.28, 0.19], [0.29, 0.21, 0.14], [0.49, 0.38, 0.26], 280, true),
+            stone_wall: paint_masonry(64),
             pine: paint_pine(64),
             post_mat,
         }
     }
 }
 
-pub fn draw_world(u: &Universe, atlas: &PaintedAtlas, cam: Vec2, view_w_m: f32, view_h_m: f32) {
+fn draw_entity(e: &Entity, u: &Universe, shadow_off: Vec2) {
+    if e.buried {
+        return;
+    }
+    let p = e.pos;
+    let sh_rad = match e.kind {
+        EntityKind::Mount => 0.95,
+        EntityKind::Cairn => 0.85,
+        _ => 0.52,
+    };
+    draw_circle(
+        p.x + shadow_off.x * 0.35,
+        p.y + 0.32 + shadow_off.y * 0.25,
+        sh_rad,
+        Color::new(0.04, 0.05, 0.06, 0.34),
+    );
+
+    match e.kind {
+        EntityKind::Cairn => {
+            draw_circle(p.x - 0.28, p.y + 0.12, 0.36, Color::new(0.46, 0.47, 0.45, 1.0));
+            draw_circle(p.x + 0.26, p.y + 0.14, 0.34, Color::new(0.40, 0.42, 0.41, 1.0));
+            draw_circle(p.x, p.y - 0.05, 0.38, Color::new(0.55, 0.56, 0.52, 1.0));
+            draw_circle(p.x, p.y - 0.32, 0.22, Color::new(0.64, 0.64, 0.60, 1.0));
+        }
+        EntityKind::Campfire => {
+            let fl = 0.85 + (u.time * 16.0).sin() * 0.15;
+            draw_circle(p.x, p.y, 2.5 * fl, Color::new(1.0, 0.55, 0.16, 0.18));
+            draw_circle(p.x, p.y, 0.42, Color::new(0.22, 0.16, 0.12, 1.0));
+            draw_circle(p.x, p.y - 0.05, 0.32 * fl, Color::new(1.0, 0.68, 0.20, 0.95));
+        }
+        EntityKind::Mount => {
+            let dir = e.facing.normalize_or_zero();
+            draw_circle(p.x - dir.x * 0.35, p.y - dir.y * 0.2, 0.68, Color::new(0.47, 0.34, 0.22, 1.0));
+            draw_circle(p.x + dir.x * 0.35, p.y + dir.y * 0.2, 0.62, Color::new(0.52, 0.38, 0.24, 1.0));
+            draw_circle(p.x + dir.x * 0.85, p.y + dir.y * 0.55 - 0.25, 0.34, Color::new(0.38, 0.26, 0.17, 1.0));
+            draw_rectangle(p.x - 0.32, p.y - 0.28, 0.64, 0.42, Color::new(0.28, 0.18, 0.11, 1.0));
+        }
+        EntityKind::Deer => {
+            draw_circle(p.x, p.y, 0.46, Color::new(0.58, 0.39, 0.24, 1.0));
+            draw_circle(p.x + e.facing.x * 0.4, p.y - 0.25, 0.22, Color::new(0.52, 0.34, 0.20, 1.0));
+        }
+        EntityKind::Corpse => {
+            let y_off = -e.z * 0.55;
+            draw_rectangle(p.x - 0.32, p.y - 0.2 + y_off, 0.64, 0.85, Color::new(0.24, 0.31, 0.24, 1.0));
+            draw_circle(p.x, p.y - 0.42 + y_off, 0.26, Color::new(0.76, 0.65, 0.56, 1.0));
+        }
+        EntityKind::Player | EntityKind::Villager | EntityKind::Redcoat => {
+            let bob = if e.vel.length() > 0.3 {
+                (u.time * 12.0 + e.id as f32).sin().abs() * -0.09
+            } else {
+                0.0
+            };
+            let y_lift = if e.mounted_id.is_some() { -0.45 } else { 0.0 } + bob;
+            let (coat, accent) = match e.kind {
+                EntityKind::Player => (Color::new(0.18, 0.36, 0.24, 1.0), Color::new(0.68, 0.18, 0.18, 1.0)),
+                EntityKind::Redcoat => (Color::new(0.74, 0.15, 0.14, 1.0), Color::new(0.92, 0.88, 0.78, 1.0)),
+                _ => (Color::new(0.38, 0.34, 0.27, 1.0), Color::new(0.24, 0.38, 0.34, 1.0)),
+            };
+            // Boots
+            draw_circle(p.x - 0.16, p.y + 0.34, 0.13, Color::new(0.16, 0.11, 0.08, 1.0));
+            draw_circle(p.x + 0.16, p.y + 0.34, 0.13, Color::new(0.16, 0.11, 0.08, 1.0));
+            // Shoulders & wool plaid cloak
+            draw_rectangle(p.x - 0.36, p.y - 0.24 + y_lift, 0.72, 0.56, coat);
+            draw_circle(p.x, p.y - 0.18 + y_lift, 0.38, coat);
+            draw_line(p.x - 0.3, p.y - 0.26 + y_lift, p.x + 0.28, p.y + 0.24 + y_lift, 0.15, accent);
+            if e.blood_stain > 0.1 {
+                draw_circle(p.x + 0.12, p.y + 0.08 + y_lift, 0.20, Color::new(0.58, 0.05, 0.05, e.blood_stain * 0.8));
+            }
+            // Head & bonnet/tricorne
+            draw_circle(p.x, p.y - 0.50 + y_lift, 0.27, Color::new(0.84, 0.70, 0.58, 1.0));
+            let hat = if e.kind == EntityKind::Redcoat {
+                Color::new(0.12, 0.12, 0.14, 1.0)
+            } else {
+                Color::new(0.16, 0.22, 0.32, 1.0)
+            };
+            draw_circle(p.x, p.y - 0.67 + y_lift, 0.24, hat);
+
+            if e.swing_timer > 0.0 {
+                let tip = p + e.facing * 1.65;
+                draw_line(p.x, p.y + y_lift, tip.x, tip.y + y_lift, 0.12, Color::new(0.88, 0.92, 0.96, 0.95));
+            }
+
+            if e.kind == EntityKind::Redcoat {
+                if let Some(m) = &e.mind {
+                    if m.awareness > 0.25 {
+                        let col = if m.goal == AiGoal::Engage { RED } else { YELLOW };
+                        draw_circle(p.x, p.y - 1.15, 0.16, col);
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn draw_cottage_exterior(b: &BuildingRecord, u: &Universe, atlas: &PaintedAtlas, shadow_off: Vec2) {
+    // Ground cast shadow
+    draw_rectangle(
+        b.x + shadow_off.x * 0.9,
+        b.y + shadow_off.y * 0.9,
+        b.w,
+        b.h,
+        Color::new(0.05, 0.06, 0.08, 0.36 * u.weather.sun_warmth),
+    );
+
+    // 3/4 Stardew-style split: top 56% pitched thatched roof, bottom 44% dry-stone front wall
+    let roof_h = b.h * 0.58;
+    let wall_y = b.y + roof_h;
+    let wall_h = b.h - roof_h;
+
+    // Front granite stone facade
+    draw_texture_ex(
+        &atlas.stone_wall,
+        b.x,
+        wall_y,
+        Color::new(0.95, 0.93, 0.88, 1.0),
+        DrawTextureParams {
+            dest_size: Some(vec2(b.w, wall_h)),
+            ..Default::default()
+        },
+    );
+    draw_rectangle_lines(b.x, wall_y, b.w, wall_h, 0.14, Color::new(0.18, 0.17, 0.16, 1.0));
+
+    // Warm glowing timber-framed windows on either side of door
+    let win_glow = if b.hearth_lit {
+        Color::new(0.96, 0.72, 0.30, 0.90)
+    } else {
+        Color::new(0.22, 0.26, 0.30, 0.90)
+    };
+    let win_y = wall_y + wall_h * 0.22;
+    for wx in [b.x + 1.1, b.x + b.w - 2.3] {
+        draw_rectangle(wx, win_y, 1.2, 1.0, win_glow);
+        draw_rectangle_lines(wx, win_y, 1.2, 1.0, 0.12, Color::new(0.24, 0.17, 0.11, 1.0));
+        draw_line(wx + 0.6, win_y, wx + 0.6, win_y + 1.0, 0.08, Color::new(0.24, 0.17, 0.11, 1.0));
+        draw_line(wx, win_y + 0.5, wx + 1.2, win_y + 0.5, 0.08, Color::new(0.24, 0.17, 0.11, 1.0));
+    }
+
+    // Recessed oak front door + stone threshold step
+    let dx = b.door_pos.x - 0.7;
+    let dy = wall_y + wall_h - 1.75;
+    draw_rectangle(dx - 0.15, b.y + b.h - 0.05, 1.7, 0.42, Color::new(0.45, 0.44, 0.40, 1.0));
+    draw_rectangle(dx, dy, 1.4, 1.75, Color::new(0.30, 0.20, 0.12, 1.0));
+    draw_rectangle_lines(dx, dy, 1.4, 1.75, 0.12, Color::new(0.18, 0.12, 0.08, 1.0));
+    draw_circle(dx + 1.12, dy + 0.92, 0.09, Color::new(0.75, 0.68, 0.45, 1.0));
+
+    // Overhanging pitched thatched roof
+    draw_texture_ex(
+        &atlas.roof,
+        b.x - 0.35,
+        b.y - 0.35,
+        WHITE,
+        DrawTextureParams {
+            dest_size: Some(vec2(b.w + 0.7, roof_h + 0.55)),
+            ..Default::default()
+        },
+    );
+    // Roof eaves shadow onto stone wall
+    draw_rectangle(b.x, wall_y + 0.15, b.w, 0.32, Color::new(0.05, 0.04, 0.04, 0.38));
+    // Roof ridge beam
+    draw_line(
+        b.x - 0.3,
+        b.y + roof_h * 0.36,
+        b.x + b.w + 0.3,
+        b.y + roof_h * 0.36,
+        0.22,
+        Color::new(0.28, 0.21, 0.13, 1.0),
+    );
+    // Granite chimney stack
+    draw_rectangle(
+        b.chimney_pos.x - 0.5,
+        b.chimney_pos.y - 0.5,
+        1.0,
+        1.0,
+        Color::new(0.38, 0.37, 0.35, 1.0),
+    );
+    draw_rectangle_lines(
+        b.chimney_pos.x - 0.5,
+        b.chimney_pos.y - 0.5,
+        1.0,
+        1.0,
+        0.12,
+        Color::new(0.22, 0.21, 0.20, 1.0),
+    );
+}
+
+fn draw_overworld(u: &Universe, atlas: &PaintedAtlas, cam: Vec2, view_w_m: f32, view_h_m: f32) {
     let tile_m = 2.0f32;
     let min_tx = ((cam.x - view_w_m * 0.6) / tile_m).floor() as i32;
     let max_tx = ((cam.x + view_w_m * 0.6) / tile_m).ceil() as i32;
     let min_ty = ((cam.y - view_h_m * 0.6) / tile_m).floor() as i32;
     let max_ty = ((cam.y + view_h_m * 0.6) / tile_m).ceil() as i32;
 
+    // 1. Base painted terrain
     for ty in min_ty..=max_ty {
         for tx in min_tx..=max_tx {
             let wx = tx as f32 * tile_m;
@@ -244,7 +458,39 @@ pub fn draw_world(u: &Universe, atlas: &PaintedAtlas, cam: Vec2, view_w_m: f32, 
         }
     }
 
+    // 2. Organic painterly edge splats to break up hard square grid seams
+    for ty in min_ty..=max_ty {
+        for tx in min_tx..=max_tx {
+            let wx = tx as f32 * tile_m + 1.0;
+            let wy = ty as f32 * tile_m + 1.0;
+            let (_, kind) = sample_terrain(u.cfg.world_seed, wx, wy);
+            let h = hash2d(u.cfg.world_seed.wrapping_add(91), tx, ty);
+            let jx = (h - 0.5) * 1.1;
+            let jy = (hash2d(u.cfg.world_seed.wrapping_add(137), tx, ty) - 0.5) * 1.1;
+            match kind {
+                TerrainKind::Heather => {
+                    draw_circle(wx + jx, wy + jy, 1.15, Color::new(0.49, 0.31, 0.48, 0.24));
+                    draw_circle(wx - jx * 0.6, wy + jy * 0.5, 0.55, Color::new(0.66, 0.42, 0.62, 0.30));
+                }
+                TerrainKind::Meadow => {
+                    draw_circle(wx + jx, wy + jy, 1.1, Color::new(0.35, 0.52, 0.24, 0.22));
+                }
+                TerrainKind::MudRoad => {
+                    draw_circle(wx + jx * 0.7, wy + jy * 0.7, 1.15, Color::new(0.39, 0.31, 0.22, 0.30));
+                }
+                TerrainKind::PeatBog => {
+                    draw_circle(wx + jx, wy + jy, 1.25, Color::new(0.18, 0.22, 0.15, 0.28));
+                }
+                _ => {}
+            }
+        }
+    }
+
+    // 3. Traces & sound waves
     for tr in &u.traces {
+        if tr.location != Location::Overworld {
+            continue;
+        }
         let a = (1.0 - tr.age / tr.max_age).clamp(0.0, 1.0) * 0.65;
         let (col, r) = match tr.kind {
             TraceKind::BootPrint => (Color::new(0.18, 0.13, 0.09, a), 0.16),
@@ -256,6 +502,9 @@ pub fn draw_world(u: &Universe, atlas: &PaintedAtlas, cam: Vec2, view_w_m: f32, 
     }
 
     for sw in &u.sound_waves {
+        if sw.location != Location::Overworld {
+            continue;
+        }
         let a = (1.0 - sw.age / 1.1).clamp(0.0, 1.0) * 0.45;
         let col = if sw.whistle {
             Color::new(0.95, 0.86, 0.45, a)
@@ -268,41 +517,19 @@ pub fn draw_world(u: &Universe, atlas: &PaintedAtlas, cam: Vec2, view_w_m: f32, 
     }
 
     let shadow_off = u.weather.sun_dir * 0.75;
+
+    // 4. 3/4 Cottages
     for b in &u.buildings {
-        draw_rectangle(
-            b.x + shadow_off.x,
-            b.y + shadow_off.y,
-            b.w,
-            b.h,
-            Color::new(0.05, 0.06, 0.08, 0.34 * u.weather.sun_warmth),
-        );
-        draw_texture_ex(
-            &atlas.floor,
-            b.x,
-            b.y,
-            WHITE,
-            DrawTextureParams {
-                dest_size: Some(vec2(b.w, b.h)),
-                ..Default::default()
-            },
-        );
-        draw_rectangle_lines(b.x, b.y, b.w, b.h, 0.45, Color::new(0.36, 0.35, 0.33, 1.0));
-        draw_rectangle(b.door_pos.x - 0.8, b.y + b.h - 0.3, 1.6, 0.55, Color::new(0.45, 0.32, 0.18, 1.0));
-        draw_circle(b.hearth_pos.x, b.hearth_pos.y, 0.72, Color::new(0.24, 0.22, 0.21, 1.0));
-        if b.hearth_lit {
-            let flick = 0.85 + (u.time * 14.0 + b.id as f32).sin() * 0.15;
-            draw_circle(b.hearth_pos.x, b.hearth_pos.y, 2.4 * flick, Color::new(1.0, 0.56, 0.18, 0.16));
-            draw_circle(b.hearth_pos.x, b.hearth_pos.y, 0.42 * flick, Color::new(1.0, 0.65, 0.18, 0.95));
-        }
+        draw_cottage_exterior(b, u, atlas, shadow_off);
     }
 
+    // 5. Gibbet on Wade's Road
     let gx = 12.0;
     let gy = -1.5;
     draw_rectangle(gx - 2.2 + shadow_off.x, gy - 0.3 + shadow_off.y, 4.4, 0.45, Color::new(0.05, 0.05, 0.07, 0.35));
     draw_rectangle(gx - 2.1, gy - 2.2, 0.35, 2.5, Color::new(0.30, 0.21, 0.14, 1.0));
     draw_rectangle(gx + 1.75, gy - 2.2, 0.35, 2.5, Color::new(0.30, 0.21, 0.14, 1.0));
     draw_rectangle(gx - 2.25, gy - 2.25, 4.5, 0.38, Color::new(0.34, 0.24, 0.16, 1.0));
-
     for c in &u.constraints {
         if c.intact {
             draw_line(c.anchor.x, c.anchor.y - 2.0, c.anchor.x, c.anchor.y + 0.1, 0.09, Color::new(0.76, 0.66, 0.44, 1.0));
@@ -311,124 +538,22 @@ pub fn draw_world(u: &Universe, atlas: &PaintedAtlas, cam: Vec2, view_w_m: f32, 
         }
     }
 
-    let mut order: Vec<usize> = (0..u.entities.len()).collect();
-    order.sort_by(|&a, &b| u.entities[a].pos.y.partial_cmp(&u.entities[b].pos.y).unwrap_or(std::cmp::Ordering::Equal));
-
+    // 6. Outdoor entities sorted by Y
+    let mut order: Vec<usize> = (0..u.entities.len())
+        .filter(|&i| u.entities[i].location == Location::Overworld)
+        .collect();
+    order.sort_by(|&a, &b| {
+        u.entities[a]
+            .pos
+            .y
+            .partial_cmp(&u.entities[b].pos.y)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     for idx in order {
-        let e = &u.entities[idx];
-        if e.buried {
-            continue;
-        }
-        let p = e.pos;
-        let sh_rad = match e.kind {
-            EntityKind::Mount => 0.95,
-            EntityKind::Cairn => 0.85,
-            _ => 0.55,
-        };
-        draw_circle(
-            p.x + shadow_off.x * 0.45,
-            p.y + 0.35 + shadow_off.y * 0.35,
-            sh_rad,
-            Color::new(0.04, 0.05, 0.06, 0.34),
-        );
-
-        match e.kind {
-            EntityKind::Cairn => {
-                draw_circle(p.x - 0.28, p.y + 0.12, 0.36, Color::new(0.46, 0.47, 0.45, 1.0));
-                draw_circle(p.x + 0.26, p.y + 0.14, 0.34, Color::new(0.40, 0.42, 0.41, 1.0));
-                draw_circle(p.x, p.y - 0.05, 0.38, Color::new(0.55, 0.56, 0.52, 1.0));
-                draw_circle(p.x, p.y - 0.32, 0.22, Color::new(0.64, 0.64, 0.60, 1.0));
-            }
-            EntityKind::Campfire => {
-                let fl = 0.85 + (u.time * 16.0).sin() * 0.15;
-                draw_circle(p.x, p.y, 2.5 * fl, Color::new(1.0, 0.55, 0.16, 0.18));
-                draw_circle(p.x, p.y, 0.42, Color::new(0.22, 0.16, 0.12, 1.0));
-                draw_circle(p.x, p.y - 0.05, 0.32 * fl, Color::new(1.0, 0.68, 0.20, 0.95));
-            }
-            EntityKind::Mount => {
-                let dir = e.facing.normalize_or_zero();
-                draw_circle(p.x - dir.x * 0.35, p.y - dir.y * 0.2, 0.68, Color::new(0.47, 0.34, 0.22, 1.0));
-                draw_circle(p.x + dir.x * 0.35, p.y + dir.y * 0.2, 0.62, Color::new(0.52, 0.38, 0.24, 1.0));
-                draw_circle(p.x + dir.x * 0.85, p.y + dir.y * 0.55 - 0.25, 0.34, Color::new(0.38, 0.26, 0.17, 1.0));
-                draw_rectangle(p.x - 0.32, p.y - 0.28, 0.64, 0.42, Color::new(0.28, 0.18, 0.11, 1.0));
-            }
-            EntityKind::Deer => {
-                draw_circle(p.x, p.y, 0.46, Color::new(0.58, 0.39, 0.24, 1.0));
-                draw_circle(p.x + e.facing.x * 0.4, p.y - 0.25, 0.22, Color::new(0.52, 0.34, 0.20, 1.0));
-            }
-            EntityKind::Corpse => {
-                let y_off = -e.z * 0.55;
-                draw_rectangle(p.x - 0.32, p.y - 0.2 + y_off, 0.64, 0.85, Color::new(0.24, 0.31, 0.24, 1.0));
-                draw_circle(p.x, p.y - 0.42 + y_off, 0.26, Color::new(0.76, 0.65, 0.56, 1.0));
-            }
-            EntityKind::Player | EntityKind::Villager | EntityKind::Redcoat => {
-                let y_lift = if e.mounted_id.is_some() { -0.45 } else { 0.0 };
-                let (coat, accent) = match e.kind {
-                    EntityKind::Player => (Color::new(0.18, 0.36, 0.24, 1.0), Color::new(0.68, 0.18, 0.18, 1.0)),
-                    EntityKind::Redcoat => (Color::new(0.74, 0.15, 0.14, 1.0), Color::new(0.92, 0.88, 0.78, 1.0)),
-                    _ => (Color::new(0.38, 0.34, 0.27, 1.0), Color::new(0.24, 0.38, 0.34, 1.0)),
-                };
-                draw_circle(p.x, p.y + y_lift, 0.48, coat);
-                draw_line(p.x - 0.3, p.y - 0.25 + y_lift, p.x + 0.3, p.y + 0.25 + y_lift, 0.16, accent);
-                if e.blood_stain > 0.1 {
-                    draw_circle(p.x + 0.12, p.y + 0.1 + y_lift, 0.22, Color::new(0.58, 0.05, 0.05, e.blood_stain * 0.8));
-                }
-                draw_circle(p.x, p.y - 0.46 + y_lift, 0.28, Color::new(0.84, 0.70, 0.58, 1.0));
-                let hat = if e.kind == EntityKind::Redcoat {
-                    Color::new(0.12, 0.12, 0.14, 1.0)
-                } else {
-                    Color::new(0.16, 0.22, 0.32, 1.0)
-                };
-                draw_circle(p.x, p.y - 0.62 + y_lift, 0.24, hat);
-
-                if e.swing_timer > 0.0 {
-                    let tip = p + e.facing * 1.65;
-                    draw_line(p.x, p.y + y_lift, tip.x, tip.y + y_lift, 0.12, Color::new(0.88, 0.92, 0.96, 0.95));
-                }
-
-                if e.kind == EntityKind::Redcoat {
-                    if let Some(m) = &e.mind {
-                        if m.awareness > 0.25 {
-                            let col = if m.goal == AiGoal::Engage { RED } else { YELLOW };
-                            draw_circle(p.x, p.y - 1.15, 0.16, col);
-                        }
-                    }
-                }
-            }
-        }
+        draw_entity(&u.entities[idx], u, shadow_off);
     }
 
-    for b in &u.buildings {
-        if b.roof_alpha > 0.02 {
-            let tint = Color::new(1.0, 1.0, 1.0, b.roof_alpha);
-            draw_texture_ex(
-                &atlas.roof,
-                b.x - 0.25,
-                b.y - 0.35,
-                tint,
-                DrawTextureParams {
-                    dest_size: Some(vec2(b.w + 0.5, b.h + 0.5)),
-                    ..Default::default()
-                },
-            );
-            draw_line(
-                b.x - 0.2,
-                b.y + b.h * 0.45,
-                b.x + b.w + 0.2,
-                b.y + b.h * 0.45,
-                0.22,
-                Color::new(0.28, 0.21, 0.13, b.roof_alpha),
-            );
-            draw_rectangle(
-                b.hearth_pos.x - 0.45,
-                b.hearth_pos.y - 0.45,
-                0.9,
-                0.9,
-                Color::new(0.38, 0.37, 0.35, b.roof_alpha),
-            );
-        }
-    }
-
+    // 7. Painted Scots Pines
     for (tp, rad) in &u.trees {
         draw_circle(
             tp.x + shadow_off.x * 0.85,
@@ -449,7 +574,11 @@ pub fn draw_world(u: &Universe, atlas: &PaintedAtlas, cam: Vec2, view_w_m: f32, 
         );
     }
 
+    // 8. Smoke & Rain
     for sp in &u.smoke {
+        if sp.location != Location::Overworld {
+            continue;
+        }
         let a = (1.0 - sp.age / sp.max_age).clamp(0.0, 1.0);
         let col = if sp.is_ember {
             Color::new(1.0, 0.62, 0.18, a)
@@ -476,22 +605,230 @@ pub fn draw_world(u: &Universe, atlas: &PaintedAtlas, cam: Vec2, view_w_m: f32, 
     }
 }
 
+fn draw_interior(u: &Universe, bid: u32, atlas: &PaintedAtlas) {
+    let Some(b) = u.building_by_id(bid) else { return; };
+
+    // Outer dark stone perimeter wall framing the room against the cozy dark void
+    draw_rectangle(
+        -0.45,
+        -0.45,
+        b.int_w + 0.9,
+        b.int_h + 0.9,
+        Color::new(0.14, 0.13, 0.12, 1.0),
+    );
+
+    // Warm timber floorboards
+    let tile = 2.0f32;
+    let cols = (b.int_w / tile).ceil() as i32;
+    let rows = (b.int_h / tile).ceil() as i32;
+    for r in 0..rows {
+        for c in 0..cols {
+            let x = c as f32 * tile;
+            let y = r as f32 * tile;
+            let w = (b.int_w - x).min(tile);
+            let h = (b.int_h - y).min(tile);
+            draw_texture_ex(
+                &atlas.floor,
+                x,
+                y,
+                Color::new(0.95, 0.92, 0.86, 1.0),
+                DrawTextureParams {
+                    dest_size: Some(vec2(w + 0.03, h + 0.03)),
+                    ..Default::default()
+                },
+            );
+        }
+    }
+
+    // Thick 3/4 north stone wall with timber wainscoting
+    draw_texture_ex(
+        &atlas.stone_wall,
+        0.0,
+        0.0,
+        Color::new(0.86, 0.83, 0.78, 1.0),
+        DrawTextureParams {
+            dest_size: Some(vec2(b.int_w, 1.55)),
+            ..Default::default()
+        },
+    );
+    draw_rectangle(0.0, 1.45, b.int_w, 0.22, Color::new(0.24, 0.17, 0.12, 1.0));
+    draw_rectangle_lines(0.0, 0.0, b.int_w, b.int_h, 0.35, Color::new(0.20, 0.18, 0.16, 1.0));
+
+    // Paned windows on north wall tinted by real outdoor sky & rain!
+    let sky_col = if u.weather.rain_intensity > 0.3 {
+        Color::new(0.32, 0.40, 0.48, 0.95)
+    } else {
+        Color::new(
+            0.48 + u.weather.sun_warmth * 0.40,
+            0.58 + u.weather.sun_warmth * 0.32,
+            0.66 + u.weather.sun_warmth * 0.20,
+            0.95,
+        )
+    };
+    for wx in [b.int_w * 0.26, b.int_w * 0.72] {
+        if (wx - b.int_hearth.x).abs() > 1.8 {
+            draw_rectangle(wx - 0.65, 0.28, 1.3, 0.95, sky_col);
+            draw_rectangle_lines(wx - 0.65, 0.28, 1.3, 0.95, 0.10, Color::new(0.25, 0.18, 0.12, 1.0));
+            draw_line(wx, 0.28, wx, 1.23, 0.07, Color::new(0.25, 0.18, 0.12, 1.0));
+            draw_line(wx - 0.65, 0.75, wx + 0.65, 0.75, 0.07, Color::new(0.25, 0.18, 0.12, 1.0));
+            // Subtle sunlit pool on floor beneath window
+            if u.weather.sun_warmth > 0.35 && u.weather.rain_intensity < 0.3 {
+                draw_rectangle(wx - 0.6, 1.75, 1.2, 1.3, Color::new(1.0, 0.92, 0.70, 0.10));
+            }
+        }
+    }
+
+    // Stone hearth fireplace on north wall
+    let hx = b.int_hearth.x;
+    let hy = b.int_hearth.y;
+    draw_rectangle(hx - 1.15, 0.12, 2.3, 1.48, Color::new(0.30, 0.29, 0.28, 1.0));
+    draw_rectangle(hx - 0.72, 0.78, 1.44, 0.85, Color::new(0.09, 0.08, 0.08, 1.0));
+    draw_rectangle(hx - 0.95, 1.55, 1.9, 0.42, Color::new(0.42, 0.40, 0.38, 1.0));
+    if b.hearth_lit {
+        let flick = 0.88 + (u.time * 15.0 + b.id as f32).sin() * 0.12;
+        draw_circle(hx, hy + 0.4, 4.4 * flick, Color::new(1.0, 0.56, 0.18, 0.14));
+        draw_circle(hx, hy + 0.2, 2.2 * flick, Color::new(1.0, 0.62, 0.20, 0.22));
+        draw_circle(hx, hy - 0.22, 0.42 * flick, Color::new(1.0, 0.58, 0.14, 0.95));
+        draw_circle(hx, hy - 0.28, 0.22 * flick, Color::new(1.0, 0.88, 0.42, 0.95));
+    }
+
+    // South exit doormat & timber threshold
+    draw_rectangle(b.int_exit.x - 1.0, b.int_h - 0.45, 2.0, 0.55, Color::new(0.42, 0.30, 0.18, 1.0));
+    draw_rectangle(b.int_exit.x - 0.85, b.int_h - 0.92, 1.7, 0.48, Color::new(0.50, 0.36, 0.22, 0.95));
+    draw_rectangle_lines(b.int_exit.x - 0.85, b.int_h - 0.92, 1.7, 0.48, 0.06, Color::new(0.30, 0.20, 0.12, 1.0));
+
+    // Floor rugs first (under furniture & people)
+    for prop in &b.props {
+        if prop.kind == PropKind::Rug {
+            draw_rectangle(prop.x, prop.y, prop.w, prop.h, Color::new(0.22, 0.34, 0.24, 0.92));
+            draw_rectangle_lines(prop.x + 0.15, prop.y + 0.15, prop.w - 0.3, prop.h - 0.3, 0.12, Color::new(0.68, 0.20, 0.18, 0.9));
+            draw_line(prop.x, prop.y + prop.h * 0.5, prop.x + prop.w, prop.y + prop.h * 0.5, 0.10, Color::new(0.68, 0.20, 0.18, 0.55));
+            draw_line(prop.x + prop.w * 0.5, prop.y, prop.x + prop.w * 0.5, prop.y + prop.h, 0.10, Color::new(0.68, 0.20, 0.18, 0.55));
+        }
+    }
+
+    // Solid interior furnishings
+    for prop in &b.props {
+        match prop.kind {
+            PropKind::Rug => {}
+            PropKind::Bed => {
+                draw_rectangle(prop.x, prop.y, prop.w, prop.h, Color::new(0.32, 0.21, 0.13, 1.0));
+                draw_rectangle(prop.x + 0.14, prop.y + 0.18, prop.w - 0.28, 0.55, Color::new(0.86, 0.83, 0.75, 1.0));
+                draw_rectangle(prop.x + 0.14, prop.y + 0.78, prop.w - 0.28, prop.h - 0.92, Color::new(0.18, 0.36, 0.24, 1.0));
+                draw_line(prop.x + 0.14, prop.y + 1.4, prop.x + prop.w - 0.14, prop.y + 1.4, 0.12, Color::new(0.68, 0.18, 0.18, 0.9));
+            }
+            PropKind::Table => {
+                draw_rectangle(prop.x + 0.12, prop.y + 0.18, prop.w, prop.h, Color::new(0.05, 0.04, 0.04, 0.32));
+                draw_rectangle(prop.x, prop.y, prop.w, prop.h, Color::new(0.42, 0.28, 0.17, 1.0));
+                draw_rectangle_lines(prop.x, prop.y, prop.w, prop.h, 0.08, Color::new(0.24, 0.15, 0.09, 1.0));
+                // Warm candle on table
+                draw_circle(prop.x + prop.w * 0.5, prop.y + prop.h * 0.45, 0.45, Color::new(1.0, 0.74, 0.30, 0.22));
+                draw_circle(prop.x + prop.w * 0.5, prop.y + prop.h * 0.45, 0.10, Color::new(1.0, 0.88, 0.48, 1.0));
+            }
+            PropKind::Anvil => {
+                draw_rectangle(prop.x + 0.1, prop.y + 0.15, prop.w, prop.h, Color::new(0.05, 0.05, 0.06, 0.4));
+                draw_rectangle(prop.x, prop.y, prop.w, prop.h, Color::new(0.28, 0.30, 0.33, 1.0));
+                draw_rectangle(prop.x + 0.18, prop.y + 0.12, prop.w - 0.36, prop.h - 0.24, Color::new(0.45, 0.48, 0.52, 1.0));
+            }
+            PropKind::Forge => {
+                draw_rectangle(prop.x, prop.y, prop.w, prop.h, Color::new(0.28, 0.26, 0.25, 1.0));
+                let fl = 0.85 + (u.time * 18.0).sin() * 0.15;
+                draw_circle(prop.x + prop.w * 0.5, prop.y + prop.h * 0.55, 0.55 * fl, Color::new(1.0, 0.42, 0.10, 0.95));
+            }
+            PropKind::BarCounter => {
+                draw_rectangle(prop.x, prop.y, prop.w, prop.h, Color::new(0.38, 0.24, 0.14, 1.0));
+                draw_rectangle_lines(prop.x, prop.y, prop.w, prop.h, 0.10, Color::new(0.20, 0.12, 0.07, 1.0));
+                // Pewter mugs along bar
+                for mx in [prop.x + 0.8, prop.x + 2.2, prop.x + 3.7] {
+                    draw_circle(mx, prop.y + 0.45, 0.12, Color::new(0.68, 0.70, 0.72, 1.0));
+                }
+            }
+            PropKind::Barrel => {
+                let c = prop.center();
+                draw_circle(c.x, c.y, prop.w * 0.48, Color::new(0.38, 0.25, 0.15, 1.0));
+                draw_circle_lines(c.x, c.y, prop.w * 0.48, 0.08, Color::new(0.20, 0.20, 0.22, 1.0));
+            }
+            PropKind::WeaponRack => {
+                draw_rectangle(prop.x, prop.y, prop.w, prop.h, Color::new(0.30, 0.20, 0.12, 1.0));
+                draw_line(prop.x + 0.2, prop.y + 0.25, prop.x + prop.w - 0.2, prop.y + 0.25, 0.08, Color::new(0.74, 0.78, 0.82, 1.0));
+                draw_line(prop.x + 0.2, prop.y + 0.48, prop.x + prop.w - 0.2, prop.y + 0.48, 0.08, Color::new(0.74, 0.78, 0.82, 1.0));
+            }
+            PropKind::CellBars => {
+                draw_rectangle(prop.x, prop.y, prop.w, prop.h, Color::new(0.16, 0.16, 0.18, 0.65));
+                draw_rectangle_lines(prop.x, prop.y, prop.w, prop.h, 0.14, Color::new(0.22, 0.23, 0.26, 1.0));
+                let bars = 6;
+                for i in 1..bars {
+                    let bx = prop.x + (prop.w * i as f32 / bars as f32);
+                    draw_line(bx, prop.y, bx, prop.y + prop.h, 0.08, Color::new(0.32, 0.34, 0.38, 1.0));
+                }
+            }
+        }
+    }
+
+    // Entities inside this building sorted by Y
+    let loc = Location::Interior(bid);
+    let mut order: Vec<usize> = (0..u.entities.len())
+        .filter(|&i| u.entities[i].location == loc)
+        .collect();
+    order.sort_by(|&a, &b| {
+        u.entities[a]
+            .pos
+            .y
+            .partial_cmp(&u.entities[b].pos.y)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    for idx in order {
+        draw_entity(&u.entities[idx], u, Vec2::new(0.25, 0.35));
+    }
+
+    // Indoor hearth embers
+    for sp in &u.smoke {
+        if sp.location != loc {
+            continue;
+        }
+        let a = (1.0 - sp.age / sp.max_age).clamp(0.0, 1.0);
+        draw_circle(sp.pos.x, sp.pos.y, sp.radius, Color::new(1.0, 0.66, 0.20, a * 0.85));
+    }
+}
+
+pub fn draw_world(u: &Universe, atlas: &PaintedAtlas, cam: Vec2, view_w_m: f32, view_h_m: f32) {
+    match u.player_location(PlayerId(1)) {
+        Location::Overworld => draw_overworld(u, atlas, cam, view_w_m, view_h_m),
+        Location::Interior(bid) => draw_interior(u, bid, atlas),
+    }
+}
+
 pub fn draw_hud_and_forge(u: &mut Universe, forge_open: &mut bool) {
     let sw = screen_width();
     let sh = screen_height();
 
-    draw_rectangle(14.0, 14.0, 340.0, 118.0, Color::new(0.09, 0.10, 0.09, 0.78));
-    draw_rectangle_lines(14.0, 14.0, 340.0, 118.0, 1.5, Color::new(0.62, 0.54, 0.36, 0.8));
+    // Smooth Stardew-style black transition curtain
+    if u.fade_alpha > 0.01 {
+        draw_rectangle(0.0, 0.0, sw, sh, Color::new(0.04, 0.04, 0.05, u.fade_alpha));
+    }
+
+    let loc = u.player_location(PlayerId(1));
+    let loc_label = match loc {
+        Location::Overworld => "Lochaber Glen".to_string(),
+        Location::Interior(bid) => u
+            .building_by_id(bid)
+            .map(|b| b.name.clone())
+            .unwrap_or_else(|| "Indoors".to_string()),
+    };
+
+    draw_rectangle(14.0, 14.0, 360.0, 136.0, Color::new(0.09, 0.10, 0.09, 0.80));
+    draw_rectangle_lines(14.0, 14.0, 360.0, 136.0, 1.5, Color::new(0.62, 0.54, 0.36, 0.8));
 
     let hour = (u.weather.time_of_day * 24.0) as u32;
     let min = ((u.weather.time_of_day * 24.0 - hour as f32) * 60.0) as u32;
     draw_text(
         &format!("CLACHAN  |  {}  |  Day {} {:02}:{:02}", u.cfg.era_year, u.weather.day_count, hour, min),
         24.0,
-        36.0,
+        35.0,
         18.0,
         Color::new(0.95, 0.88, 0.72, 1.0),
     );
+    draw_text(&loc_label, 24.0, 54.0, 15.0, Color::new(0.75, 0.82, 0.68, 0.95));
 
     if let Some(pi) = u.player_index(PlayerId(1)) {
         let p = &u.entities[pi];
@@ -502,16 +839,50 @@ pub fn draw_hud_and_forge(u: &mut Universe, forge_open: &mut bool) {
             ("Powder Dry", 1.0 - p.powder_wetness, Color::new(0.86, 0.68, 0.30, 1.0)),
         ];
         for (idx, (label, val, col)) in bars.iter().enumerate() {
-            let by = 48.0 + idx as f32 * 19.0;
+            let by = 64.0 + idx as f32 * 19.0;
             draw_text(label, 24.0, by + 11.0, 15.0, Color::new(0.85, 0.84, 0.80, 0.95));
-            draw_rectangle(135.0, by, 204.0, 12.0, Color::new(0.18, 0.19, 0.18, 0.9));
-            draw_rectangle(135.0, by, 204.0 * val.clamp(0.0, 1.0), 12.0, *col);
+            draw_rectangle(142.0, by, 214.0, 12.0, Color::new(0.18, 0.19, 0.18, 0.9));
+            draw_rectangle(142.0, by, 214.0 * val.clamp(0.0, 1.0), 12.0, *col);
+        }
+
+        // Context prompt when near a doorway or interactive interior prop
+        let mut prompt_text: Option<String> = None;
+        match loc {
+            Location::Overworld => {
+                if let Some(b) = u.buildings.iter().find(|b| b.door_pos.distance(p.pos) < 2.2) {
+                    prompt_text = Some(format!("[Walk Up / E] Enter {}", b.name));
+                }
+            }
+            Location::Interior(bid) => {
+                if let Some(b) = u.building_by_id(bid) {
+                    if b.int_exit.distance(p.pos) < 1.65 {
+                        prompt_text = Some("[Walk Down / E] Step Outside".to_string());
+                    } else if b.int_hearth.distance(p.pos) < 2.2 {
+                        prompt_text = Some("[E] Stoke / Bank Hearth".to_string());
+                    } else {
+                        for prop in &b.props {
+                            if !prop.prompt.is_empty() && prop.center().distance(p.pos) < 2.25 {
+                                prompt_text = Some(prop.prompt.clone());
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if let Some(pt) = prompt_text {
+            let pw = measure_text(&pt, None, 18, 1.0).width + 26.0;
+            let px = (sw - pw) * 0.5;
+            let py = sh - 82.0;
+            draw_rectangle(px, py, pw, 30.0, Color::new(0.09, 0.10, 0.09, 0.86));
+            draw_rectangle_lines(px, py, pw, 30.0, 1.2, Color::new(0.80, 0.68, 0.42, 0.9));
+            draw_text(&pt, px + 13.0, py + 20.0, 18.0, Color::new(0.96, 0.90, 0.70, 1.0));
         }
     }
 
-    draw_rectangle(14.0, sh - 38.0, sw - 28.0, 26.0, Color::new(0.08, 0.09, 0.08, 0.75));
+    draw_rectangle(14.0, sh - 38.0, sw - 28.0, 26.0, Color::new(0.08, 0.09, 0.08, 0.78));
     draw_text(
-        "[WASD] Move  [Click/Space] Steel  [F] Flintlock  [E] Talk/Mount/Carry  [B] Bury Cairn  [H] Whistle Bramble  [C] Fire  [R] Bandage  [V] Whet  [TAB] Universe Forge  [F5/F9] Save/Load",
+        "[WASD] Move  [Click/Space] Steel  [F] Flintlock  [E] Interact/Door/Bed  [B] Bury Cairn  [H] Whistle Bramble  [C] Fire  [R] Bandage  [TAB] Universe Forge",
         22.0,
         sh - 20.0,
         15.0,
@@ -521,7 +892,7 @@ pub fn draw_hud_and_forge(u: &mut Universe, forge_open: &mut bool) {
     if let Some(utt) = u.utterances.last() {
         let bw = (sw - 120.0).min(860.0);
         let bx = (sw - bw) * 0.5;
-        let by = sh - 126.0;
+        let by = sh - 160.0;
         draw_rectangle(bx, by, bw, 76.0, Color::new(0.10, 0.09, 0.08, 0.88));
         draw_rectangle_lines(bx, by, bw, 76.0, 1.5, Color::new(0.75, 0.64, 0.40, 0.9));
         draw_text(&utt.speaker, bx + 14.0, by + 22.0, 19.0, Color::new(0.96, 0.84, 0.52, 1.0));
