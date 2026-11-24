@@ -1,0 +1,8 @@
+{
+  "name": "Clachan",
+  "short_name": "Clachan",
+  "start_url": "./index.html",
+  "display": "fullscreen",
+  "background_color": "#161816",
+  "theme_color": "#2b3a2c"
+}
