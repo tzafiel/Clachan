@@ -1,6 +1,12 @@
 use crate::config::UniverseConfig;
 use macroquad::prelude::Vec2;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Location {
+    Overworld,
+    Interior(u32),
+}
+
 #[derive(Clone, Debug)]
 pub struct Rng {
     state: u64,
@@ -156,7 +162,9 @@ impl WeatherState {
             0.0
         };
         self.rain_intensity += (target_rain - self.rain_intensity) * (dt * 0.35).min(1.0);
-        self.mist_intensity = (cfg.mist_baseline + self.rain_intensity * 0.28 + (1.0 - sun_h.max(0.0)) * 0.15).clamp(0.0, 0.85);
+        self.mist_intensity =
+            (cfg.mist_baseline + self.rain_intensity * 0.28 + (1.0 - sun_h.max(0.0)) * 0.15)
+                .clamp(0.0, 0.85);
 
         let wind_ang = 0.25 + (self.time_of_day * 4.0).sin() * 0.45;
         let wind_mag = cfg.base_wind_mps * (1.0 + self.rain_intensity * 0.6);
@@ -176,6 +184,7 @@ pub enum TraceKind {
 
 #[derive(Clone, Copy, Debug)]
 pub struct TraceMark {
+    pub location: Location,
     pub pos: Vec2,
     pub kind: TraceKind,
     pub age: f32,
@@ -184,6 +193,7 @@ pub struct TraceMark {
 
 #[derive(Clone, Debug)]
 pub struct SoundWave {
+    pub location: Location,
     pub pos: Vec2,
     pub radius: f32,
     pub max_radius: f32,
@@ -195,6 +205,7 @@ pub struct SoundWave {
 
 #[derive(Clone, Copy, Debug)]
 pub struct SmokePuff {
+    pub location: Location,
     pub pos: Vec2,
     pub vel: Vec2,
     pub radius: f32,
@@ -203,50 +214,108 @@ pub struct SmokePuff {
     pub is_ember: bool,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PropKind {
+    Rug,
+    Bed,
+    Table,
+    Anvil,
+    Forge,
+    BarCounter,
+    Barrel,
+    WeaponRack,
+    CellBars,
+}
+
+#[derive(Clone, Debug)]
+pub struct InteriorProp {
+    pub kind: PropKind,
+    pub x: f32,
+    pub y: f32,
+    pub w: f32,
+    pub h: f32,
+    pub solid: bool,
+    pub prompt: String,
+}
+
+impl InteriorProp {
+    pub fn center(&self) -> Vec2 {
+        Vec2::new(self.x + self.w * 0.5, self.y + self.h * 0.5)
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct BuildingRecord {
     pub id: u32,
     pub name: String,
     pub role: String,
+    // Overworld exterior footprint
     pub x: f32,
     pub y: f32,
     pub w: f32,
     pub h: f32,
     pub door_pos: Vec2,
-    pub hearth_pos: Vec2,
+    pub chimney_pos: Vec2,
     pub hearth_lit: bool,
-    pub roof_alpha: f32,
+    // Separated Stardew-style interior scene dimensions & layout
+    pub int_w: f32,
+    pub int_h: f32,
+    pub int_exit: Vec2,
+    pub int_hearth: Vec2,
+    pub props: Vec<InteriorProp>,
 }
 
 impl BuildingRecord {
-    pub fn contains(&self, p: Vec2) -> bool {
+    pub fn contains_exterior(&self, p: Vec2) -> bool {
         p.x >= self.x && p.x <= self.x + self.w && p.y >= self.y && p.y <= self.y + self.h
     }
 
-    pub fn near_door(&self, p: Vec2) -> bool {
-        p.distance(self.door_pos) < 1.85
+    pub fn resolve_exterior_collision(&self, prev: Vec2, next: Vec2, radius: f32) -> Vec2 {
+        let min_x = self.x - radius;
+        let max_x = self.x + self.w + radius;
+        let min_y = self.y - radius;
+        let max_y = self.y + self.h + radius;
+        if next.x > min_x && next.x < max_x && next.y > min_y && next.y < max_y {
+            let mut out = next;
+            if prev.x <= min_x {
+                out.x = min_x;
+            } else if prev.x >= max_x {
+                out.x = max_x;
+            } else if prev.y <= min_y {
+                out.y = min_y;
+            } else {
+                out.y = max_y;
+            }
+            return out;
+        }
+        next
     }
 
-    pub fn resolve_wall_collision(&self, prev: Vec2, next: Vec2, radius: f32) -> Vec2 {
-        let was_in = self.contains(prev);
-        let now_in = self.contains(next);
-        if was_in == now_in || self.near_door(prev) || self.near_door(next) {
-            return next;
-        }
+    pub fn resolve_interior_collision(&self, prev: Vec2, next: Vec2, radius: f32) -> Vec2 {
         let mut out = next;
-        if !was_in && now_in {
-            let dl = (next.x - self.x).abs();
-            let dr = (self.x + self.w - next.x).abs();
-            let dt = (next.y - self.y).abs();
-            let db = (self.y + self.h - next.y).abs();
-            let m = dl.min(dr).min(dt).min(db);
-            if m == dl { out.x = self.x - radius; }
-            else if m == dr { out.x = self.x + self.w + radius; }
-            else if m == dt { out.y = self.y - radius; }
-            else { out.y = self.y + self.h + radius; }
-        } else if was_in && !now_in {
-            out.x = out.x.clamp(self.x + radius, self.x + self.w - radius);
-            out.y = out.y.clamp(self.y + radius, self.y + self.h - radius);
+        // North stone wall takes up top 1.55m for authentic 3/4 depth
+        out.x = out.x.clamp(radius + 0.35, self.int_w - radius - 0.35);
+        out.y = out.y.clamp(1.65 + radius, self.int_h - radius - 0.30);
+
+        for prop in &self.props {
+            if !prop.solid {
+                continue;
+            }
+            let min_x = prop.x - radius;
+            let max_x = prop.x + prop.w + radius;
+            let min_y = prop.y - radius;
+            let max_y = prop.y + prop.h + radius;
+            if out.x > min_x && out.x < max_x && out.y > min_y && out.y < max_y {
+                if prev.x <= min_x {
+                    out.x = min_x;
+                } else if prev.x >= max_x {
+                    out.x = max_x;
+                } else if prev.y <= min_y {
+                    out.y = min_y;
+                } else {
+                    out.y = max_y;
+                }
+            }
         }
         out
     }
@@ -254,8 +323,7 @@ impl BuildingRecord {
     pub fn blocks_segment(&self, a: Vec2, b: Vec2) -> bool {
         for i in 1..8 {
             let t = i as f32 / 8.0;
-            let p = a.lerp(b, t);
-            if self.contains(p) && !self.near_door(p) {
+            if self.contains_exterior(a.lerp(b, t)) {
                 return true;
             }
         }
@@ -274,9 +342,19 @@ pub fn generate_clachan_buildings() -> Vec<BuildingRecord> {
             w: 8.0,
             h: 6.0,
             door_pos: Vec2::new(-9.0, -2.0),
-            hearth_pos: Vec2::new(-11.4, -6.4),
+            chimney_pos: Vec2::new(-11.3, -6.5),
             hearth_lit: true,
-            roof_alpha: 1.0,
+            int_w: 11.0,
+            int_h: 8.0,
+            int_exit: Vec2::new(5.5, 7.35),
+            int_hearth: Vec2::new(5.5, 1.55),
+            props: vec![
+                InteriorProp { kind: PropKind::Rug, x: 3.7, y: 3.3, w: 3.6, h: 2.3, solid: false, prompt: String::new() },
+                InteriorProp { kind: PropKind::Bed, x: 1.0, y: 2.1, w: 1.8, h: 2.6, solid: true, prompt: "[E] Sleep until Dawn".to_string() },
+                InteriorProp { kind: PropKind::Table, x: 7.4, y: 2.8, w: 2.1, h: 1.4, solid: true, prompt: String::new() },
+                InteriorProp { kind: PropKind::WeaponRack, x: 8.4, y: 1.35, w: 1.6, h: 0.65, solid: true, prompt: "[E] Check Gear".to_string() },
+                InteriorProp { kind: PropKind::Barrel, x: 1.0, y: 5.5, w: 0.9, h: 0.9, solid: true, prompt: String::new() },
+            ],
         },
         BuildingRecord {
             id: 2,
@@ -287,9 +365,19 @@ pub fn generate_clachan_buildings() -> Vec<BuildingRecord> {
             w: 9.0,
             h: 6.5,
             door_pos: Vec2::new(-9.5, 14.5),
-            hearth_pos: Vec2::new(-12.2, 9.6),
+            chimney_pos: Vec2::new(-12.2, 9.6),
             hearth_lit: true,
-            roof_alpha: 1.0,
+            int_w: 12.0,
+            int_h: 8.5,
+            int_exit: Vec2::new(6.0, 7.85),
+            int_hearth: Vec2::new(2.6, 1.65),
+            props: vec![
+                InteriorProp { kind: PropKind::Forge, x: 1.4, y: 1.35, w: 2.4, h: 1.2, solid: true, prompt: "[E] Stoke Forge".to_string() },
+                InteriorProp { kind: PropKind::Anvil, x: 4.5, y: 3.4, w: 1.3, h: 0.85, solid: true, prompt: "[E] Hone Dirk at Anvil".to_string() },
+                InteriorProp { kind: PropKind::WeaponRack, x: 8.5, y: 1.4, w: 2.4, h: 0.75, solid: true, prompt: String::new() },
+                InteriorProp { kind: PropKind::Table, x: 8.4, y: 4.4, w: 2.2, h: 1.3, solid: true, prompt: String::new() },
+                InteriorProp { kind: PropKind::Barrel, x: 1.3, y: 5.6, w: 0.95, h: 0.95, solid: true, prompt: String::new() },
+            ],
         },
         BuildingRecord {
             id: 3,
@@ -300,9 +388,20 @@ pub fn generate_clachan_buildings() -> Vec<BuildingRecord> {
             w: 10.5,
             h: 7.0,
             door_pos: Vec2::new(-10.8, -15.0),
-            hearth_pos: Vec2::new(-14.2, -20.2),
+            chimney_pos: Vec2::new(-14.2, -20.2),
             hearth_lit: true,
-            roof_alpha: 1.0,
+            int_w: 14.0,
+            int_h: 9.5,
+            int_exit: Vec2::new(7.0, 8.85),
+            int_hearth: Vec2::new(2.8, 1.6),
+            props: vec![
+                InteriorProp { kind: PropKind::Rug, x: 1.8, y: 2.8, w: 3.4, h: 2.4, solid: false, prompt: String::new() },
+                InteriorProp { kind: PropKind::BarCounter, x: 7.6, y: 2.7, w: 4.8, h: 1.15, solid: true, prompt: "[E] Drink Warm Ale".to_string() },
+                InteriorProp { kind: PropKind::Barrel, x: 11.6, y: 1.45, w: 0.95, h: 0.95, solid: true, prompt: String::new() },
+                InteriorProp { kind: PropKind::Barrel, x: 10.4, y: 1.45, w: 0.95, h: 0.95, solid: true, prompt: String::new() },
+                InteriorProp { kind: PropKind::Table, x: 2.2, y: 5.6, w: 2.3, h: 1.3, solid: true, prompt: String::new() },
+                InteriorProp { kind: PropKind::Table, x: 9.2, y: 5.8, w: 2.3, h: 1.3, solid: true, prompt: String::new() },
+            ],
         },
         BuildingRecord {
             id: 4,
@@ -313,9 +412,17 @@ pub fn generate_clachan_buildings() -> Vec<BuildingRecord> {
             w: 8.5,
             h: 6.5,
             door_pos: Vec2::new(23.2, -7.5),
-            hearth_pos: Vec2::new(25.8, -12.2),
+            chimney_pos: Vec2::new(25.8, -12.2),
             hearth_lit: true,
-            roof_alpha: 1.0,
+            int_w: 12.0,
+            int_h: 8.5,
+            int_exit: Vec2::new(6.0, 7.85),
+            int_hearth: Vec2::new(9.6, 1.6),
+            props: vec![
+                InteriorProp { kind: PropKind::CellBars, x: 0.8, y: 1.6, w: 3.8, h: 3.1, solid: true, prompt: String::new() },
+                InteriorProp { kind: PropKind::Table, x: 6.2, y: 3.6, w: 2.4, h: 1.3, solid: true, prompt: String::new() },
+                InteriorProp { kind: PropKind::WeaponRack, x: 5.6, y: 1.4, w: 2.5, h: 0.7, solid: true, prompt: String::new() },
+            ],
         },
     ]
 }
