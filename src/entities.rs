@@ -1,5 +1,6 @@
 use crate::config::{DialectId, MaterialId};
 use crate::dialogue::MemoryRing;
+use crate::world::Location;
 use macroquad::prelude::{Color, Vec2};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -53,6 +54,7 @@ pub struct AgentMind {
     pub dialect: DialectId,
     pub memories: MemoryRing,
     pub home_pos: Vec2,
+    pub home_building_id: Option<u32>,
     pub patrol_a: Vec2,
     pub patrol_b: Vec2,
     pub patrol_to_b: bool,
@@ -67,6 +69,7 @@ pub struct Entity {
     pub name: String,
     pub kind: EntityKind,
     pub clan: ClanId,
+    pub location: Location,
     pub pos: Vec2,
     pub z: f32,
     pub vel: Vec2,
