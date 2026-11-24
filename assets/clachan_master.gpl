@@ -1,0 +1,66 @@
+GIMP Palette
+Name: Clachan Master 56
+Columns: 8
+# Row 1: Shared Outlines, Stone & Snow-White Anchors
+ 18  14  28	Void Indigo (Deepest Outline)
+ 38  30  52	Plum Charcoal (Soft Outline)
+ 67  59  84	Cool Granite Shadow
+108 106 125	Weathered Stone Mid
+159 162 173	Sunlit Granite
+214 218 224	Bright Stone / Steel
+247 244 232	Sunlit Ivory (Snow / Sails / Parchment)
+255 255 255	Pure Spark / Seafoam
+# Row 2: Sunlit Glens, Pines & Heather
+ 21  56  58	Deep Pine Shadow (Teal)
+ 31  92  78	Scots Pine Mid
+ 49 135  84	Highland Emerald
+ 94 176  74	Sunlit Meadow Grass
+157 209  82	Bright Clover / Grass Tip
+218 232 114	Golden Sunlit Leaf
+ 84  44  92	Deep Heather Shadow
+146  74 148	Moorland Heather Mid
+# Row 3: Heather Bloom, Earth, Ship Oak, Thatch & Brass
+201 124 189	Sunlit Heather Bloom
+ 56  29  31	Deep Peat / Ship Hull Dark
+ 97  52  40	Rich Soil / Oak Shadow
+143  82  54	Packed Road / Bay Horse
+189 119  68	Warm Timber / Dark Brass
+224 162  86	Golden Thatch / Brass Mid
+245 207 118	Sunlit Straw / Polished Brass
+252 238 164	Gorse Blossom / Lantern Bright
+# Row 4: Open Oceans, Sea Lochs & Snowy Mountains
+ 22  44  89	Abyssal Ocean
+ 31  74 140	Deep Sea / Mountain Shadow
+ 44 118 184	Open Ocean / Highland Bonnet
+ 64 168 209	Coastal Turquoise / Glacial Ice
+122 214 227	Shallow Surf / Ice Highlight
+116 142 194	Snow Shadow (Periwinkle)
+172 199 235	Snow Mid (Crisp Sky Blue)
+226 239 250	Snow Light
+# Row 5: Upper Caves — Bioluminescent Stone Ruins
+ 30  27  56	Cavern Deep Indigo
+ 52  50  87	Ruin Stone Mid
+ 84  86 122	Carved Ruin Highlight
+ 24  94 107	Bioluminescent Teal Dark
+ 36 168 164	Bioluminescent Glow Mid
+ 82 235 207	Electric Moss / Crystal Cyan
+174 252 234	Bioluminescent Core
+140  94 214	Mystic Ruin Violet
+# Row 6: Deep Caves (Magma & Forge), Fire, Blood & Redcoats
+ 74  20  34	Deep Crimson / Magma Crust
+133  27  42	Blood / Dark Tartan Red
+194  44  49	Redcoat Scarlet / Lava Dark
+232  88  46	Magma Orange / Hearth Flame
+247 148  48	Molten Gold / Forge Glow
+255 206  77	Lantern Core / White-Hot Steel
+110  68  58	Deep Leather / Rich Skin Dark
+163 103  78	Skin Shadow / Warm Hide
+# Row 7: Character Skins, Hair, Tartans & UI Parchment
+209 144 107	Skin Mid Warm
+240 190 151	Skin Light
+252 223 194	Skin Highlight
+ 82  47  36	Chestnut Hair / Bark
+194  86  44	Highland Ginger Hair
+224 180  96	Golden Blonde Hair
+ 68 128 112	Clan Seafoam Tartan
+209 184 150	UI Parchment / Cream Wool
