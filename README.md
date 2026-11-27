@@ -38,5 +38,4 @@ cargo run --bin clachan_forge -- ingest
 
 Tile images are written to `assets/tilesets/`; sprite images go to
 `assets/sprites/`. Near-white backgrounds connected to the image edge are
-removed from sprites, and grass-colored tile borders are normalized for
-seamless joins.
+removed from sprites; tile RGB values are preserved during ingestion.

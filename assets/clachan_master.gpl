@@ -1,0 +1,75 @@
+GIMP Palette
+Name: Clachan Master 64
+Columns: 8
+# Row 1: Shared Cool Outlines, Slate, Granite, Steel & Snow White
+ 18  14  28	Void Indigo (Deepest Outline)
+ 39  32  54	Plum Charcoal (Soft Outline)
+ 68  62  87	Dark Slate Shadow
+107 107 128	Weathered Granite Mid
+156 162 176	Sunlit Granite
+206 214 224	Bright Stone / Steel Edge
+246 242 230	Sunlit Ivory (Snow / Sails / Bone)
+255 255 255	Pure Foam / Waterfall Spray / Spark
+# Row 2: Caledonian Rainforest, Moss, Sunlit Glens & Pine
+ 16  48  54	Deep Canopy Shadow (Teal)
+ 24  79  74	Ancient Pine Mid
+ 34 115  82	Rainforest Emerald
+ 56 153  78	Lush Moss / Glen Grass
+102 189  75	Sunlit Meadow Grass
+162 217  85	Bright Fern / Clover
+217 237 119	Sunbeam Leaf Tip
+102 168 124	Misty Pine / Lichen Sage
+# Row 3: Rich Earth, Bark, Ship Oak, Thatch, Autumn Birch & Brass
+ 56  29  31	Deep Peat / Ship Hull Dark
+ 94  50  38	Rich Soil / Wet Oak
+138  78  50	Packed Road / Bark / Bay Horse
+184 115  62	Warm Timber / Dark Brass
+219 156  79	Golden Thatch / Polished Brass
+242 199 102	Autumn Birch Gold / Sunlit Straw
+252 232 146	Gorse Blossom / Bright Brass
+207 181 143	Dry Sand / UI Parchment
+# Row 4: Waterfalls, Oceans, Thermal Springs & Snowy Peaks
+ 20  40  87	Abyssal Ocean
+ 29  70 138	Deep Sea / Mountain Shadow
+ 41 114 184	Open Ocean / Highland Bonnet
+ 51 163 204	Waterfall Turquoise / Glacial Ice
+107 212 224	Plunge Pool / Thermal Spring
+178 242 245	Waterfall Mist / Ice Highlight
+115 142 196	Snow Shadow (Crisp Periwinkle)
+180 207 240	Snow Mid (Sky Blue)
+# Row 5: Heather Moors, Cavern Stone & Bioluminescent Ruins
+ 30  26  59	Cavern Deep Indigo
+ 53  48  92	Ruin Stone Dark
+ 86  84 130	Carved Ruin Highlight
+ 84  42  94	Heather Shadow / Deep Plum
+145  72 150	Moorland Heather / Amethyst
+204 122 190	Sunlit Heather / Rose Crystal
+ 33 166 158	Bioluminescent Teal
+ 84 240 209	Electric Moss / Crystal Core
+# Row 6: Deep Forge Magma, Autumn Crimson, Redcoats & Mystic Violet
+ 74  19  36	Magma Crust / Dark Crimson
+133  26  42	Blood / Autumn Maple Dark
+194  43  48	Redcoat Scarlet / Lava Dark
+232  85  44	Magma Orange / Hearth Flame
+247 145  45	Molten Gold / Autumn Orange
+255 204  71	Lantern Core / White-Hot Steel
+143  92 219	Mystic Ruin Violet
+194 148 250	Glowing Rune Lavender
+# Row 7: Basalt Cliffs, Coastal Sandstone, Verdigris Copper & Fens
+ 48  48  56	Volcanic Basalt Dark
+ 79  84  89	Basalt Column Mid
+112  79  68	Cliff Clay Shadow
+158 117  95	Warm Sandstone / Driftwood
+204 162 128	Sunlit Limestone / Beach
+ 58 107  96	Verdigris Copper Dark
+ 92 163 139	Aged Sea-Copper / Sea Glass
+150 112  54	Ochre Fen Grass / Sulfur Moss
+# Row 8: Character Skins, Hair Ramps & Wildlife Coats
+ 99  58  49	Rich Skin Dark / Dark Hide
+148  90  68	Skin Shadow / Red Stag Coat
+199 135  99	Skin Mid Warm
+235 182 142	Skin Light
+252 220 191	Skin Highlight
+ 77  44  34	Chestnut Hair / Bear Fur
+189  82  40	Highland Ginger / Fox Fur
+222 178  93	Golden Blonde Hair
