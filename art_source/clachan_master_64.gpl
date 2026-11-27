@@ -1,0 +1,76 @@
+GIMP Palette
+Name: Clachan Master 64 v2 (Stardew Highlands)
+Columns: 8
+#
+# --- Void Outline, Granite & Linen (8) ---
+ 23  22  36	Void Indigo Outline
+ 46  48  64	Wet Slate
+ 77  81  97	Shadow Granite
+115 120 133	Mid Granite
+157 162 171	Light Granite
+198 197 192	Weathered Stone
+227 222 209	Linen Cream
+247 244 235	Pure Chalk
+# --- Stardew Meadow & Highland Greens (8) ---
+ 26  51  37	Deep Forest Shadow
+ 40  77  49	Dark Highland Moss
+ 59 105  53	Shaded Meadow Grass
+ 82 133  58	Highland Meadow Base
+107 158  66	Stardew Lush Grass
+138 184  79	Sunlit Clover Green
+176 207 101	Spring Sprout Highlight
+116 143 103	Muted Lichen Sage
+# --- Scots Pine & Coastal Sea-Greens (6) ---
+ 19  41  38	Abyssal Pine
+ 31  66  58	Scots Pine Needles
+ 47  97  82	Highland Fern Teal
+ 72 135 112	Shallow Cove Green
+115 179 149	Seafoam Surf
+173 217 193	Coastal Mist
+# --- Loch, Ocean, Sky & Bonnet Blues (10) ---
+ 17  29  54	Deep Trench Blue
+ 26  49  87	North Sea Indigo
+ 37  75 122	Deep Loch Blue
+ 52 105 158	Stardew River Blue
+ 76 140 194	Bright Loch Mid
+115 178 219	Sky Ripple Blue
+166 212 237	Water Highlight Foam
+214 237 247	Highland Cloud Blue
+ 40  56  84	Tartan Navy
+ 66  91 125	Highland Bonnet Blue
+# --- Earth, Peat, Dirt Roads & Thatch (10) ---
+ 43  28  23	Dark Peat Shadow
+ 71  45  34	Wet Mud Bank
+ 99  63  44	Dark Oak Saddle
+128  84  53	Dirt Road Shadow
+158 109  67	Stardew Dirt Base
+189 140  89	Sunlit Dirt Sporran
+212 174 116	Golden Thatch Mid
+232 203 142	Sunlit Straw Thatch
+242 224 179	Sand Pale Pebble
+107  95  84	Riverbank Cobble
+# --- Jacobite Crimson, Fox & Hearth Fire (8) ---
+ 74  29  33	Deep Tartan Burgundy
+125  41  41	Jacobite Crimson
+179  58  51	Redcoat Scarlet
+217  92  56	Rowan Berry Ember
+224 134  56	Red Fox Fur
+240 181  69	Hearth Flame Gold
+250 227 125	Lantern Glow
+ 97  54  42	Weathered Rust
+# --- Skin Tones & Hair (8) ---
+ 87  52  39	Deep Umber Hair
+133  82  60	Chestnut Hair Horse
+181 124  94	Warm Tanned Skin
+214 159 126	Fair Highland Skin
+237 194 164	Warm Skin Highlight
+247 222 198	Pale Skin Highlight
+163  75  46	Highland Auburn Hair
+217 178 108	Flaxen Blonde Hair
+# --- Highland Heather & Metals (6) ---
+ 64  41  74	Deep Heather Shadow
+107  67 117	Highland Heather
+158 110 166	Thistle Blossom
+201 163 207	Pale Lilac Petal
+ 92 107 122	Forged Broadsword Steel
+199 152  56	Flintlock Brass

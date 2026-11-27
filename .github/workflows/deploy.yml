@@ -22,9 +22,12 @@ jobs:
         run: cargo build --target wasm32-unknown-unknown --release
       - name: Stage Pages bundle
         run: |
-          mkdir -p dist
-          cp index.html manifest.json sw.js dist/
-          cp target/wasm32-unknown-unknown/release/clachan.wasm dist/clachan.wasm
+          mkdir -p dist/play
+          cp index.html style.css app.js dist/
+          cp -R site_assets dispatches dist/
+          cp play/index.html play/manifest.json play/sw.js dist/play/
+          cp target/wasm32-unknown-unknown/release/clachan.wasm dist/play/clachan.wasm
+          cp -R assets dist/play/assets
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

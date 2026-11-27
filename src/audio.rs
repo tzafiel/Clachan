@@ -40,7 +40,7 @@ mod inner {
     impl AudioBank {
         pub async fn synthesize() -> Self {
             let sr = 22050u32;
-            let mut rng = Rng::new(1744_888);
+            let mut rng = Rng::new(0x5049_4E45);
 
             let steel_s: Vec<f32> = (0..(sr / 5))
                 .map(|i| {
@@ -58,7 +58,8 @@ mod inner {
                     let t = i as f32 / sr as f32;
                     let env = (-t * 34.0).exp();
                     let crack = (rng.next_f32() * 2.0 - 1.0) * 0.7;
-                    let twang = (t * (420.0 - t * 1400.0).max(80.0) * std::f32::consts::TAU).sin() * 0.5;
+                    let twang =
+                        (t * (420.0 - t * 1400.0).max(80.0) * std::f32::consts::TAU).sin() * 0.5;
                     (crack + twang) * env * 0.6
                 })
                 .collect();
@@ -78,7 +79,11 @@ mod inner {
             let misfire_s: Vec<f32> = (0..(sr / 5))
                 .map(|i| {
                     let t = i as f32 / sr as f32;
-                    let click = if t < 0.012 { (t * 4800.0 * std::f32::consts::TAU).sin() * 0.6 } else { 0.0 };
+                    let click = if t < 0.012 {
+                        (t * 4800.0 * std::f32::consts::TAU).sin() * 0.6
+                    } else {
+                        0.0
+                    };
                     let fizz = (rng.next_f32() * 2.0 - 1.0) * (-t * 14.0).exp() * 0.22;
                     click + fizz
                 })
@@ -117,7 +122,13 @@ mod inner {
 
         pub fn play(sound: &SfxSlot, vol: f32) {
             if let Some(s) = sound {
-                play_sound(s, PlaySoundParams { looped: false, volume: vol });
+                play_sound(
+                    s,
+                    PlaySoundParams {
+                        looped: false,
+                        volume: vol,
+                    },
+                );
             }
         }
     }

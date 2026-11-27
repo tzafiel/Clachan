@@ -1,17 +1,18 @@
 use crate::audio::AudioBank;
-use crate::config::{spec, DefeatMode, DialectId, MaterialId, UniverseConfig};
-use crate::dialogue::{
-    compose_redcoat_alert, compose_villager_line, MemoryKind, MemoryRing, UtteranceOutput,
-};
+use crate::config::{DefeatMode, DialectId, MaterialId, UniverseConfig};
+use crate::dialogue::{compose_villager_line, MemoryKind, MemoryRing, UtteranceOutput};
 use crate::entities::{
     AgentMind, AiGoal, ClanId, ClanRecord, CommandPacket, Constraint, DeltaEntry, DeltaLedger,
-    Entity, EntityKind, PlayerId,
+    Entity, EntityKind, Inventory, InventoryItem, MicroState, PlayerId,
 };
+use crate::ldtk_loader::LdtkCollisionWorld;
 use crate::world::{
-    generate_clachan_buildings, sample_terrain, BuildingRecord, Location, PropKind, Rng,
-    SmokePuff, SoundWave, TerrainKind, TraceKind, TraceMark, WeatherState,
+    BuildingRecord, Location, PropKind, Rng, SmokePuff, SoundWave, TerrainKind, TraceKind,
+    TraceMark, WeatherState,
 };
+use crate::world_stream::{WorldBlueprint, WorldStream};
 use macroquad::prelude::{Color, Vec2};
+use std::sync::Arc;
 
 #[derive(Clone, Debug)]
 pub enum TransitAction {
@@ -32,7 +33,8 @@ pub struct Universe {
     pub clans: Vec<ClanRecord>,
     pub entities: Vec<Entity>,
     pub constraints: Vec<Constraint>,
-    pub trees: Vec<(Vec2, f32)>,
+    pub world_stream: WorldStream,
+    pub ldtk_collision_world: Option<Arc<LdtkCollisionWorld>>,
     pub traces: Vec<TraceMark>,
     pub sound_waves: Vec<SoundWave>,
     pub smoke: Vec<SmokePuff>,
@@ -49,10 +51,9 @@ pub struct Universe {
 }
 
 impl Universe {
-    pub fn new(cfg: UniverseConfig) -> Self {
-        let mut rng = Rng::new(cfg.world_seed);
+    pub fn new(cfg: UniverseConfig, blueprint: Arc<WorldBlueprint>) -> Self {
         let weather = WeatherState::new(&cfg);
-        let buildings = generate_clachan_buildings();
+        let buildings = Vec::new();
 
         let clans = vec![
             ClanRecord {
@@ -60,23 +61,13 @@ impl Universe {
                 name: "Clan MacRae".to_string(),
                 tartan_primary: Color::new(0.18, 0.36, 0.24, 1.0),
                 tartan_accent: Color::new(0.68, 0.18, 0.18, 1.0),
-                alert_level: 0.0,
                 territory_count: 3,
             },
             ClanRecord {
                 id: ClanId(1),
-                name: "Fort William Garrison".to_string(),
-                tartan_primary: Color::new(0.72, 0.16, 0.15, 1.0),
-                tartan_accent: Color::new(0.92, 0.88, 0.78, 1.0),
-                alert_level: 0.0,
-                territory_count: 1,
-            },
-            ClanRecord {
-                id: ClanId(2),
                 name: "Wilderness".to_string(),
                 tartan_primary: Color::new(0.45, 0.35, 0.25, 1.0),
                 tartan_accent: Color::new(0.7, 0.65, 0.55, 1.0),
-                alert_level: 0.0,
                 territory_count: 0,
             },
         ];
@@ -90,14 +81,15 @@ impl Universe {
             clans,
             entities: Vec::new(),
             constraints: Vec::new(),
-            trees: Vec::new(),
+            world_stream: WorldStream::new(blueprint),
+            ldtk_collision_world: None,
             traces: Vec::new(),
             sound_waves: Vec::new(),
             smoke: Vec::new(),
             utterances: Vec::new(),
             ledger: DeltaLedger::default(),
             status_toast: (
-                "Welcome to Clachan (1744). Walk into any doorway to enter.".to_string(),
+                "An Tìr Shàmhach — Oir na Giùthsaich (The Pine-Edge).".to_string(),
                 6.0,
             ),
             scars: Vec::new(),
@@ -138,6 +130,9 @@ impl Universe {
             swing_timer: 0.0,
             recoil_timer: 0.0,
             trace_accum: 0.0,
+            walk_phase: 0.0,
+            posture: MicroState::default(),
+            inventory: Some(Inventory::starter()),
             mind: None,
         });
 
@@ -171,82 +166,36 @@ impl Universe {
             swing_timer: 0.0,
             recoil_timer: 0.0,
             trace_accum: 0.0,
+            walk_phase: 0.0,
+            posture: MicroState::default(),
+            inventory: None,
             mind: Some(AgentMind {
                 courage: 0.72,
                 loyalty: 0.92,
                 suspicion: 0.0,
                 bond_to_player: 0.75,
-                awareness: 0.0,
                 goal: AiGoal::Graze,
                 dialect: cfg.default_dialect,
                 memories: MemoryRing::new(),
                 home_pos: Vec2::new(-4.5, 2.2),
                 home_building_id: None,
-                patrol_a: Vec2::ZERO,
-                patrol_b: Vec2::ZERO,
-                patrol_to_b: false,
-                speak_cooldown: 0.0,
-                attack_cooldown: 0.0,
             }),
         });
 
-        // Gibbet on Wade's Road
-        let gibbet_x = 12.0;
-        let gibbet_y = -1.5;
-        for (idx, (cname, ox)) in [("Ewan of Glen Nevis", -0.85), ("Hamish MacDonald", 0.85)]
-            .iter()
-            .enumerate()
-        {
-            let cid = 10 + idx as u32;
-            let anchor = Vec2::new(gibbet_x + *ox, gibbet_y);
-            u.entities.push(Entity {
-                id: cid,
-                owner_player: None,
-                name: cname.to_string(),
-                kind: EntityKind::Corpse,
-                clan: ClanId(0),
-                location: Location::Overworld,
-                pos: anchor + Vec2::new(0.0, 0.35),
-                z: 1.4,
-                vel: Vec2::ZERO,
-                facing: Vec2::new(0.0, 1.0),
-                mass_kg: 76.0,
-                material: MaterialId::Flesh,
-                wetness: 0.3,
-                temp_k: 284.0,
-                health: 0.0,
-                max_health: 100.0,
-                stamina: 0.0,
-                bleed_rate: 0.0,
-                blood_stain: 0.25,
-                blade_sharpness: 0.0,
-                powder_wetness: 0.0,
-                carrying_id: None,
-                mounted_id: None,
-                buried: false,
-                alive: false,
-                swing_timer: 0.0,
-                recoil_timer: 0.0,
-                trace_accum: 0.0,
-                mind: None,
-            });
-            u.constraints.push(Constraint {
-                id: 500 + idx as u32,
-                entity_id: cid,
-                anchor,
-                material: MaterialId::HempRope,
-                max_shear_n: spec(MaterialId::HempRope).shear_pa,
-                intact: true,
-                discovered_by_patrol: false,
-            });
-        }
-
-        // Clachan Villagers (Alistair tends the Alehouse interior, Duncan works the Smithy, others roam & shelter inside during rain)
+        // Pine-Edge residents
         let villagers = [
-            ("Mairi the Weaver", Location::Overworld, Vec2::new(-8.0, 16.5), Some(3u32)),
-            ("Duncan the Smith", Location::Interior(2), Vec2::new(6.2, 3.6), Some(2u32)),
-            ("Alistair of the Alehouse", Location::Interior(3), Vec2::new(9.8, 2.0), Some(3u32)),
-            ("Morag the Crofter", Location::Overworld, Vec2::new(-3.0, -5.5), Some(3u32)),
+            (
+                "Mairi the Weaver",
+                Location::Overworld,
+                Vec2::new(-4.0, 7.0),
+                None,
+            ),
+            (
+                "Seumas the Woodwright",
+                Location::Overworld,
+                Vec2::new(2.5, 6.0),
+                None,
+            ),
         ];
         for (i, (vname, start_loc, pos, home_bld)) in villagers.iter().enumerate() {
             u.entities.push(Entity {
@@ -278,95 +227,32 @@ impl Universe {
                 swing_timer: 0.0,
                 recoil_timer: 0.0,
                 trace_accum: 0.0,
+                walk_phase: 0.0,
+                posture: MicroState::default(),
+                inventory: None,
                 mind: Some(AgentMind {
                     courage: 0.45,
                     loyalty: 0.85,
                     suspicion: 0.1,
                     bond_to_player: 0.25,
-                    awareness: 0.0,
                     goal: AiGoal::Idle,
                     dialect: cfg.default_dialect,
                     memories: MemoryRing::new(),
                     home_pos: *pos,
                     home_building_id: *home_bld,
-                    patrol_a: *pos,
-                    patrol_b: *pos + Vec2::new(4.0, 2.0),
-                    patrol_to_b: true,
-                    speak_cooldown: 0.0,
-                    attack_cooldown: 0.0,
-                }),
-            });
-        }
-
-        // Fort William Redcoat Patrols
-        let patrols = [
-            ("Corporal Hargreaves", Vec2::new(11.0, -16.0), Vec2::new(11.0, 14.0)),
-            ("Private Finch", Vec2::new(13.2, -17.5), Vec2::new(13.2, 12.5)),
-            ("Sergeant Mercer", Vec2::new(21.5, -5.0), Vec2::new(16.0, 8.0)),
-        ];
-        for (i, (rname, pa, pb)) in patrols.iter().enumerate() {
-            u.entities.push(Entity {
-                id: 40 + i as u32,
-                owner_player: None,
-                name: rname.to_string(),
-                kind: EntityKind::Redcoat,
-                clan: ClanId(1),
-                location: Location::Overworld,
-                pos: *pa,
-                z: 0.0,
-                vel: Vec2::ZERO,
-                facing: Vec2::new(0.0, 1.0),
-                mass_kg: 86.0,
-                material: MaterialId::Wool,
-                wetness: 0.15,
-                temp_k: 310.0,
-                health: 95.0,
-                max_health: 95.0,
-                stamina: 100.0,
-                bleed_rate: 0.0,
-                blood_stain: 0.0,
-                blade_sharpness: 0.9,
-                powder_wetness: 0.1,
-                carrying_id: None,
-                mounted_id: None,
-                buried: false,
-                alive: true,
-                swing_timer: 0.0,
-                recoil_timer: 0.0,
-                trace_accum: 0.0,
-                mind: Some(AgentMind {
-                    courage: 0.85,
-                    loyalty: 0.9,
-                    suspicion: 0.35,
-                    bond_to_player: -0.25,
-                    awareness: 0.0,
-                    goal: AiGoal::Patrol,
-                    dialect: if cfg.default_dialect == DialectId::PartyAnnouncer {
-                        DialectId::PartyAnnouncer
-                    } else {
-                        DialectId::RedcoatMilitary
-                    },
-                    memories: MemoryRing::new(),
-                    home_pos: Vec2::new(23.0, -6.0),
-                    home_building_id: Some(4),
-                    patrol_a: *pa,
-                    patrol_b: *pb,
-                    patrol_to_b: true,
-                    speak_cooldown: 0.0,
-                    attack_cooldown: 0.0,
                 }),
             });
         }
 
         // Highland Red Deer
-        for i in 0..3 {
+        for i in 0..1 {
             let dp = Vec2::new(-18.0 + i as f32 * 4.5, 22.0 + (i as f32 * 2.1).sin() * 3.0);
             u.entities.push(Entity {
                 id: 60 + i as u32,
                 owner_player: None,
                 name: "Highland Red Deer".to_string(),
                 kind: EntityKind::Deer,
-                clan: ClanId(2),
+                clan: ClanId(1),
                 location: Location::Overworld,
                 pos: dp,
                 z: 0.0,
@@ -390,46 +276,37 @@ impl Universe {
                 swing_timer: 0.0,
                 recoil_timer: 0.0,
                 trace_accum: 0.0,
+                walk_phase: 0.0,
+                posture: MicroState::default(),
+                inventory: None,
                 mind: Some(AgentMind {
                     courage: 0.1,
                     loyalty: 0.0,
                     suspicion: 0.5,
                     bond_to_player: 0.0,
-                    awareness: 0.0,
                     goal: AiGoal::Graze,
-                    dialect: DialectId::Highland1744,
+                    dialect: DialectId::HighlandGaelic,
                     memories: MemoryRing::new(),
                     home_pos: dp,
                     home_building_id: None,
-                    patrol_a: dp,
-                    patrol_b: dp,
-                    patrol_to_b: false,
-                    speak_cooldown: 0.0,
-                    attack_cooldown: 0.0,
                 }),
             });
         }
 
-        for _ in 0..115 {
-            let tx = rng.range_f32(-36.0, 42.0);
-            let ty = rng.range_f32(-36.0, 36.0);
-            let p = Vec2::new(tx, ty);
-            let (_, tk) = sample_terrain(cfg.world_seed, tx, ty);
-            if tk == TerrainKind::LochWater || tk == TerrainKind::MudRoad {
-                continue;
-            }
-            if p.distance(Vec2::new(gibbet_x, gibbet_y)) < 4.5 {
-                continue;
-            }
-            if u.buildings.iter().any(|b| {
-                tx > b.x - 2.4 && tx < b.x + b.w + 2.4 && ty > b.y - 2.4 && ty < b.y + b.h + 2.8
-            }) {
-                continue;
-            }
-            u.trees.push((p, rng.range_f32(1.4, 2.4)));
-        }
-
+        u.update_world_stream();
         u
+    }
+
+    pub fn set_ldtk_collision_world(&mut self, collision_world: Arc<LdtkCollisionWorld>) {
+        self.ldtk_collision_world = Some(collision_world);
+    }
+
+    pub fn update_world_stream(&mut self) {
+        let Some(player_index) = self.player_index(PlayerId(1)) else {
+            return;
+        };
+        let player_pos = self.entities[player_index].pos;
+        self.world_stream.update(player_pos, &self.ledger);
     }
 
     pub fn toast(&mut self, msg: impl Into<String>) {
@@ -498,7 +375,11 @@ impl Universe {
         }
 
         match cmd {
-            CommandPacket::Move { player, dir, sprint } => {
+            CommandPacket::Move {
+                player,
+                dir,
+                sprint,
+            } => {
                 if let Some(pi) = self.player_index(player) {
                     let p_loc = self.entities[pi].location;
                     let carrying_mass = if let Some(cid) = self.entities[pi].carrying_id {
@@ -510,11 +391,7 @@ impl Universe {
                     };
                     let mounted = self.entities[pi].mounted_id.is_some();
                     let mud_drag = if p_loc == Location::Overworld {
-                        let (_, tk) = sample_terrain(
-                            self.cfg.world_seed,
-                            self.entities[pi].pos.x,
-                            self.entities[pi].pos.y,
-                        );
+                        let tk = self.world_stream.terrain_at(self.entities[pi].pos);
                         match tk {
                             TerrainKind::PeatBog => 0.58,
                             TerrainKind::MudRoad => 1.0 - self.weather.rain_intensity * 0.22,
@@ -550,8 +427,46 @@ impl Universe {
                 }
             }
 
+            CommandPacket::SelectHotbar { player, slot } => {
+                if slot >= 5 {
+                    return;
+                }
+                if let Some(pi) = self.player_index(player) {
+                    if let Some(inventory) = &mut self.entities[pi].inventory {
+                        if inventory.hotbar[slot].is_some() {
+                            inventory.selected_slot = slot;
+                        } else {
+                            self.toast("That hotbar slot is empty.");
+                        }
+                    }
+                }
+            }
+
+            CommandPacket::UseHotbar { player, aim } => {
+                let selected = self
+                    .player_index(player)
+                    .and_then(|pi| self.entities[pi].inventory.as_ref())
+                    .and_then(|inventory| {
+                        inventory.hotbar[inventory.selected_slot].map(|s| s.item)
+                    });
+                let Some(item) = selected else {
+                    self.toast("That hotbar slot is empty.");
+                    return;
+                };
+                let command = match item {
+                    InventoryItem::Dirk => CommandPacket::SwingSteel { player, aim },
+                    InventoryItem::Hatchet => CommandPacket::ChopWithHatchet { player, aim },
+                    InventoryItem::Whistle => CommandPacket::WhistleMount { player },
+                    InventoryItem::Bandage => CommandPacket::BindWounds { player },
+                    InventoryItem::PeatFire => CommandPacket::BuildCampfire { player },
+                };
+                self.apply_command(command, sfx);
+            }
+
             CommandPacket::SwingSteel { player, aim } => {
-                let Some(pi) = self.player_index(player) else { return; };
+                let Some(pi) = self.player_index(player) else {
+                    return;
+                };
                 if self.entities[pi].swing_timer > 0.0 || self.entities[pi].stamina < 8.0 {
                     return;
                 }
@@ -632,102 +547,62 @@ impl Universe {
                         let ename = self.entities[ti].name.clone();
                         self.toast(format!("{} fell.", ename));
                     } else {
-                        let is_redcoat = self.entities[ti].kind == EntityKind::Redcoat;
                         if let Some(mind) = &mut self.entities[ti].mind {
-                            if is_redcoat {
-                                mind.goal = AiGoal::Engage;
-                                mind.awareness = 1.0;
-                            } else {
-                                mind.goal = AiGoal::Flee;
-                            }
+                            mind.goal = AiGoal::Flee;
                         }
                     }
                 }
             }
 
-            CommandPacket::FireFlintlock { player, aim } => {
-                let Some(pi) = self.player_index(player) else { return; };
-                if self.entities[pi].recoil_timer > 0.0 {
+            CommandPacket::ChopWithHatchet { player, aim } => {
+                let Some(pi) = self.player_index(player) else {
                     return;
-                }
-                self.entities[pi].recoil_timer = 1.1;
-                let dir = aim.normalize_or_zero();
-                self.entities[pi].facing = dir;
-                let p_loc = self.entities[pi].location;
-                let p_pos = self.entities[pi].pos;
-
-                let misfire_chance = (self.entities[pi].powder_wetness
-                    * self.cfg.ignition_humidity_penalty)
-                    .clamp(0.0, 0.92);
-                if self.rng.next_f32() < misfire_chance {
-                    AudioBank::play(&sfx.misfire, 0.55);
-                    self.toast("CLICK-FIZZLE! Rain fouled your black powder — dry off by a hearth!");
-                    return;
-                }
-
-                AudioBank::play(&sfx.gunshot, 0.65);
-                self.emit_sound(p_loc, p_pos, 98.0, true, false);
-                for _ in 0..8 {
-                    self.smoke.push(SmokePuff {
-                        location: p_loc,
-                        pos: p_pos + dir * 0.9,
-                        vel: dir * self.rng.range_f32(1.2, 2.8)
-                            + if p_loc == Location::Overworld {
-                                self.weather.wind_vec * 0.35
-                            } else {
-                                Vec2::ZERO
-                            },
-                        radius: self.rng.range_f32(0.5, 1.1),
-                        age: 0.0,
-                        max_age: 4.5,
-                        is_ember: false,
-                    });
-                }
-
-                let wind_deflect = if p_loc == Location::Overworld {
-                    Vec2::new(-dir.y, dir.x) * (self.weather.wind_vec.length() * 0.008)
-                } else {
-                    Vec2::ZERO
                 };
-                let shot_dir = (dir + wind_deflect).normalize_or_zero();
-                let mut hit_target = None;
-                for i in 0..self.entities.len() {
-                    if i == pi
-                        || !self.entities[i].alive
-                        || self.entities[i].location != p_loc
-                        || self.entities[i].kind == EntityKind::Mount
-                    {
-                        continue;
-                    }
-                    let rel = self.entities[i].pos - p_pos;
-                    let proj = rel.dot(shot_dir);
-                    if proj > 0.5 && proj < 26.0 {
-                        let perp = (rel - shot_dir * proj).length();
-                        if perp < 0.95 && self.has_line_of_sight(p_loc, p_pos, self.entities[i].pos)
-                        {
-                            hit_target = Some(i);
-                            break;
-                        }
-                    }
+                if self.entities[pi].location != Location::Overworld {
+                    self.toast("Take the hatchet outdoors to fell a Scots pine.");
+                    return;
                 }
-                if let Some(ti) = hit_target {
-                    let dmg = 78.0 * self.cfg.lethality_mult;
-                    self.entities[ti].health -= dmg;
-                    self.entities[ti].vel += shot_dir * (11.0 * self.cfg.knockback_mult);
-                    if self.cfg.lethality_mult > 0.0 {
-                        self.entities[ti].bleed_rate += 3.0 * self.cfg.bleed_rate_mult;
-                        if self.entities[ti].health <= 0.0 {
-                            self.entities[ti].alive = false;
-                            self.entities[ti].kind = EntityKind::Corpse;
-                            let ename = self.entities[ti].name.clone();
-                            self.toast(format!("Musket ball dropped {}.", ename));
-                        }
+                if self.entities[pi].swing_timer > 0.0 || self.entities[pi].stamina < 8.0 {
+                    return;
+                }
+                let p_pos = self.entities[pi].pos;
+                let p_face = aim.normalize_or_zero();
+                self.entities[pi].facing = p_face;
+                self.entities[pi].swing_timer = 0.42;
+                self.entities[pi].stamina =
+                    (self.entities[pi].stamina - 12.0 * self.cfg.stamina_drain_mult).max(0.0);
+                AudioBank::play(&sfx.steel, 0.48);
+                self.emit_sound(Location::Overworld, p_pos, 38.0, false, false);
+
+                let target = self
+                    .world_stream
+                    .foliage()
+                    .iter()
+                    .filter(|tree| {
+                        !tree.chopped
+                            && tree.position.distance(p_pos) < 2.6
+                            && (tree.position - p_pos).normalize_or_zero().dot(p_face) > 0.2
+                    })
+                    .min_by(|left, right| {
+                        left.position
+                            .distance_squared(p_pos)
+                            .total_cmp(&right.position.distance_squared(p_pos))
+                    })
+                    .map(|tree| tree.id);
+                if let Some(tree_id) = target {
+                    if self.world_stream.chop_foliage(tree_id) {
+                        self.ledger.push(DeltaEntry::FoliageChopped(tree_id));
+                        self.toast("Felled a Scots pine with your hatchet.");
                     }
+                } else {
+                    self.toast("No Scots pine within hatchet reach.");
                 }
             }
 
             CommandPacket::Interact { player } => {
-                let Some(pi) = self.player_index(player) else { return; };
+                let Some(pi) = self.player_index(player) else {
+                    return;
+                };
                 let p_loc = self.entities[pi].location;
                 let p_pos = self.entities[pi].pos;
 
@@ -745,6 +620,37 @@ impl Universe {
                         let cname = self.entities[ci].name.clone();
                         self.toast(format!("Laid {} gently on the ground.", cname));
                     }
+                    return;
+                }
+
+                let beside_campfire = self.entities.iter().enumerate().any(|(index, entity)| {
+                    index != pi
+                        && entity.kind == EntityKind::Campfire
+                        && entity.alive
+                        && entity.location == p_loc
+                        && entity.pos.distance(p_pos) < 2.6
+                });
+                let beside_lit_hearth = match p_loc {
+                    Location::Overworld => false,
+                    Location::Interior(building_id) => self
+                        .building_by_id(building_id)
+                        .map(|building| {
+                            building.hearth_lit && building.int_hearth.distance(p_pos) < 2.2
+                        })
+                        .unwrap_or(false),
+                };
+                if beside_campfire || beside_lit_hearth {
+                    let current_hour = self.weather.time_of_day * 24.0;
+                    let next_sun_hour = if current_hour < 7.0 {
+                        7.0
+                    } else if current_hour < 12.0 {
+                        12.0
+                    } else {
+                        7.0
+                    };
+                    self.weather.set_time_to_hour(next_sun_hour);
+                    self.entities[pi].stamina = 100.0;
+                    self.toast("Rested by the fire until the next daylight.");
                     return;
                 }
 
@@ -780,8 +686,10 @@ impl Universe {
                         EntityKind::Corpse => {
                             let cid = self.entities[ti].id;
                             let cname = self.entities[ti].name.clone();
-                            let still_hung =
-                                self.constraints.iter().any(|c| c.entity_id == cid && c.intact);
+                            let still_hung = self
+                                .constraints
+                                .iter()
+                                .any(|c| c.entity_id == cid && c.intact);
                             if still_hung {
                                 self.toast("Hemp rope holds them aloft — slash it with steel [Click/Space] first.");
                             } else {
@@ -838,7 +746,8 @@ impl Universe {
 
                         if let Some(b) = self.buildings.iter_mut().find(|b| b.id == bid) {
                             if b.int_exit.distance(p_pos) < 1.65 {
-                                exit_info = Some((b.door_pos + Vec2::new(0.0, 1.45), b.name.clone()));
+                                exit_info =
+                                    Some((b.door_pos + Vec2::new(0.0, 1.45), b.name.clone()));
                             } else if b.int_hearth.distance(p_pos) < 2.2 {
                                 b.hearth_lit = !b.hearth_lit;
                                 toggled_hearth = Some(b.hearth_lit);
@@ -881,7 +790,9 @@ impl Universe {
                                     {
                                         b.hearth_lit = true;
                                     }
-                                    self.toast("Pumped the bellows — the smithy forge roars bright.");
+                                    self.toast(
+                                        "Pumped the bellows — the smithy forge roars bright.",
+                                    );
                                 }
                                 PropKind::BarCounter => {
                                     self.entities[pi].stamina = 100.0;
@@ -892,7 +803,9 @@ impl Universe {
                                 }
                                 PropKind::WeaponRack => {
                                     self.entities[pi].powder_wetness = 0.0;
-                                    self.toast("Repacked fresh dry powder from the horn on the rack.");
+                                    self.toast(
+                                        "Repacked fresh dry powder from the horn on the rack.",
+                                    );
                                 }
                                 _ => {}
                             }
@@ -902,7 +815,9 @@ impl Universe {
             }
 
             CommandPacket::BuryCarried { player } => {
-                let Some(pi) = self.player_index(player) else { return; };
+                let Some(pi) = self.player_index(player) else {
+                    return;
+                };
                 if self.entities[pi].location != Location::Overworld {
                     self.toast("Carry them outdoors to lay a fieldstone cairn on Highland soil.");
                     return;
@@ -950,10 +865,14 @@ impl Universe {
                     swing_timer: 0.0,
                     recoil_timer: 0.0,
                     trace_accum: 0.0,
+                    walk_phase: 0.0,
+                    posture: MicroState::default(),
+                    inventory: None,
                     mind: None,
                 });
 
-                self.ledger.push(DeltaEntry::CorpseBuried(cid, bury_pos.x, bury_pos.y));
+                self.ledger
+                    .push(DeltaEntry::CorpseBuried(cid, bury_pos.x, bury_pos.y));
                 for i in 0..self.entities.len() {
                     if self.entities[i].kind == EntityKind::Villager {
                         let d = self.entities[i].pos.distance(bury_pos);
@@ -974,7 +893,9 @@ impl Universe {
             }
 
             CommandPacket::WhistleMount { player } => {
-                let Some(pi) = self.player_index(player) else { return; };
+                let Some(pi) = self.player_index(player) else {
+                    return;
+                };
                 if self.entities[pi].location != Location::Overworld {
                     self.toast("Step outdoors to whistle for Bramble.");
                     return;
@@ -995,6 +916,15 @@ impl Universe {
             CommandPacket::BindWounds { player } => {
                 if let Some(pi) = self.player_index(player) {
                     if self.entities[pi].bleed_rate > 0.0 || self.entities[pi].health < 95.0 {
+                        let consumed = self.entities[pi]
+                            .inventory
+                            .as_mut()
+                            .map(|inventory| inventory.consume(InventoryItem::Bandage, 1))
+                            .unwrap_or(false);
+                        if !consumed {
+                            self.toast("You are out of clean bandages.");
+                            return;
+                        }
                         self.entities[pi].bleed_rate = 0.0;
                         self.entities[pi].health = (self.entities[pi].health + 18.0).min(100.0);
                         self.entities[pi].blood_stain =
@@ -1015,9 +945,13 @@ impl Universe {
             }
 
             CommandPacket::BuildCampfire { player } => {
-                let Some(pi) = self.player_index(player) else { return; };
+                let Some(pi) = self.player_index(player) else {
+                    return;
+                };
                 if self.entities[pi].location != Location::Overworld {
-                    self.toast("Use the stone hearth indoors rather than lighting peat on the floor.");
+                    self.toast(
+                        "Use the stone hearth indoors rather than lighting peat on the floor.",
+                    );
                     return;
                 }
                 let fpos = self.entities[pi].pos + self.entities[pi].facing * 1.6;
@@ -1025,8 +959,20 @@ impl Universe {
                     self.toast("Too much driving rain to strike peat outdoors!");
                     return;
                 }
+                let has_fire = self.entities[pi]
+                    .inventory
+                    .as_ref()
+                    .map(|inventory| inventory.count(InventoryItem::PeatFire) > 0)
+                    .unwrap_or(false);
+                if !has_fire {
+                    self.toast("You need a peat fire kit from your pack.");
+                    return;
+                }
                 let fid = self.next_id;
                 self.next_id += 1;
+                if let Some(inventory) = &mut self.entities[pi].inventory {
+                    inventory.consume(InventoryItem::PeatFire, 1);
+                }
                 self.entities.push(Entity {
                     id: fid,
                     owner_player: None,
@@ -1056,6 +1002,9 @@ impl Universe {
                     swing_timer: 0.0,
                     recoil_timer: 0.0,
                     trace_accum: 0.0,
+                    walk_phase: 0.0,
+                    posture: MicroState::default(),
+                    inventory: None,
                     mind: None,
                 });
                 self.toast("Lit a crackling peat fire. Stand close to dry wool & black powder.");
@@ -1064,7 +1013,9 @@ impl Universe {
     }
 
     fn execute_transit(&mut self, action: TransitAction) {
-        let Some(pi) = self.player_index(PlayerId(1)) else { return; };
+        let Some(pi) = self.player_index(PlayerId(1)) else {
+            return;
+        };
         match action {
             TransitAction::MovePlayer { loc, pos, msg } => {
                 // Dismount Bramble safely outside when entering a building
@@ -1089,22 +1040,19 @@ impl Universe {
             }
             TransitAction::SleepToDawn => {
                 self.weather.day_count += 1;
-                self.weather.time_of_day = 0.29; // Crisp 07:00 Highland morning
+                self.weather.set_time_to_hour(7.0);
                 self.entities[pi].health = self.entities[pi].max_health;
                 self.entities[pi].stamina = 100.0;
                 self.entities[pi].bleed_rate = 0.0;
                 self.entities[pi].wetness = 0.0;
                 self.entities[pi].powder_wetness = 0.0;
                 self.entities[pi].temp_k = 310.2;
-                self.toast(format!(
-                    "Day {} dawns over Lochaber. Rested, warm, and dry.",
-                    self.weather.day_count
-                ));
+                self.toast("Morning returns to the Pine-Edge. Rested, warm, and dry.");
             }
         }
     }
 
-    pub fn step(&mut self, dt: f32, sfx: &AudioBank) {
+    pub fn step(&mut self, dt: f32, _sfx: &AudioBank) {
         self.time += dt;
         self.weather.step(dt, &self.cfg);
         if self.door_cooldown > 0.0 {
@@ -1246,10 +1194,6 @@ impl Universe {
             }
         }
 
-        let mut alert_events: Vec<(String, DialectId, bool)> = Vec::new();
-        let mut player_hit_dmg = 0.0f32;
-        let mut player_knock = Vec2::ZERO;
-
         for i in 0..self.entities.len() {
             let kind = self.entities[i].kind;
             let e_loc = self.entities[i].location;
@@ -1285,10 +1229,38 @@ impl Universe {
             }
 
             let pos = self.entities[i].pos;
-            let sheltered = e_loc != Location::Overworld;
+            let z_depth = self.entities[i].z.round() as i32;
+            let ldtk_sheltered = e_loc == Location::Overworld
+                && self
+                    .ldtk_collision_world
+                    .as_ref()
+                    .map(|world| world.is_sheltered_world_pos(pos.x, pos.y, z_depth))
+                    .unwrap_or(false);
+            let sheltered = e_loc != Location::Overworld || ldtk_sheltered;
             let near_fire = heat_sources
                 .iter()
                 .any(|(hl, hp)| *hl == e_loc && hp.distance(pos) < 4.5);
+            let moving = self.entities[i].vel.length_squared() > 0.08;
+            {
+                let posture = &mut self.entities[i].posture;
+                posture.in_shelter = sheltered;
+                if moving {
+                    posture.idle_timer = 0.0;
+                } else {
+                    posture.idle_timer += dt;
+                }
+                let wants_hood = self.weather.rain_intensity > 0.25 && !sheltered;
+                if wants_hood != posture.hood_up {
+                    posture.hood_timer += dt;
+                    if posture.hood_timer >= 0.55 {
+                        posture.hood_up = wants_hood;
+                        posture.hood_timer = 0.0;
+                    }
+                } else {
+                    posture.hood_timer = 0.0;
+                }
+                posture.warming_hands = near_fire && !moving && posture.idle_timer > 0.85;
+            }
 
             if self.weather.rain_intensity > 0.05 && !sheltered {
                 let soak = self.weather.rain_intensity * self.cfg.wetness_soak_rate * dt;
@@ -1349,15 +1321,9 @@ impl Universe {
             // NPC AI (works seamlessly across Overworld and Interiors!)
             if self.entities[i].alive && kind != EntityKind::Player {
                 let mut desired_v = Vec2::ZERO;
-                let mut new_goal = None;
-                let mut speak_alert = None;
-                let mut did_swing = false;
                 let mut npc_warp: Option<(Location, Vec2)> = None;
-                let entity_name = self.entities[i].name.clone();
                 let entity_id = self.entities[i].id;
                 let same_loc_as_player = e_loc == player_loc;
-                let los_to_player = same_loc_as_player
-                    && self.has_line_of_sight(e_loc, pos, player_pos);
 
                 let home_door_info = self.entities[i]
                     .mind
@@ -1369,20 +1335,11 @@ impl Universe {
                     });
 
                 if let Some(mind) = &mut self.entities[i].mind {
-                    if mind.speak_cooldown > 0.0 {
-                        mind.speak_cooldown -= dt;
-                    }
-                    if mind.attack_cooldown > 0.0 {
-                        mind.attack_cooldown -= dt;
-                    }
-
                     for (wloc, wpos, wrad, hostiles_care) in &active_waves {
                         if *wloc == e_loc && pos.distance(*wpos) < *wrad {
-                            if kind == EntityKind::Redcoat && *hostiles_care {
-                                mind.goal = AiGoal::Investigate(*wpos);
-                                mind.awareness = (mind.awareness + 0.6).min(1.0);
-                            } else if kind == EntityKind::Villager && *hostiles_care {
-                                mind.memories.push(MemoryKind::HeardGunfire, self.time, -0.15);
+                            if kind == EntityKind::Villager && *hostiles_care {
+                                mind.memories
+                                    .push(MemoryKind::HeardWhistle, self.time, 0.05);
                             } else if kind == EntityKind::Deer && *hostiles_care {
                                 mind.goal = AiGoal::Flee;
                             }
@@ -1454,89 +1411,7 @@ impl Universe {
                                 }
                             }
                         }
-                        EntityKind::Redcoat => {
-                            let vis_range = self.cfg.vision_range_m
-                                * (1.0 - self.weather.mist_intensity * 0.55);
-                            if e_loc == Location::Overworld {
-                                for c in &mut self.constraints {
-                                    if !c.intact
-                                        && !c.discovered_by_patrol
-                                        && pos.distance(c.anchor) < vis_range * 0.65
-                                    {
-                                        c.discovered_by_patrol = true;
-                                        mind.awareness = 1.0;
-                                        self.clans[1].alert_level =
-                                            (self.clans[1].alert_level + 0.5).min(1.0);
-                                        self.ledger.push(DeltaEntry::GarrisonAlert(
-                                            self.clans[1].alert_level,
-                                        ));
-                                        speak_alert =
-                                            Some((entity_name.clone(), mind.dialect, true));
-                                        new_goal = Some(AiGoal::Investigate(c.anchor));
-                                    }
-                                }
-                            }
-
-                            let dist_p = pos.distance(player_pos);
-                            if same_loc_as_player && dist_p < vis_range && los_to_player {
-                                let alert_push = if self.clans[1].alert_level > 0.3 {
-                                    0.45
-                                } else {
-                                    0.0
-                                };
-                                if alert_push > 0.0 || mind.goal == AiGoal::Engage {
-                                    mind.awareness = (mind.awareness + dt * 0.65).min(1.0);
-                                    if mind.awareness > 0.85 {
-                                        mind.goal = AiGoal::Engage;
-                                        if mind.speak_cooldown <= 0.0 {
-                                            mind.speak_cooldown = 7.0;
-                                            speak_alert =
-                                                Some((entity_name.clone(), mind.dialect, false));
-                                        }
-                                    }
-                                }
-                            }
-
-                            match mind.goal {
-                                AiGoal::Patrol => {
-                                    let tgt = if mind.patrol_to_b {
-                                        mind.patrol_b
-                                    } else {
-                                        mind.patrol_a
-                                    };
-                                    if pos.distance(tgt) < 1.3 {
-                                        mind.patrol_to_b = !mind.patrol_to_b;
-                                    } else {
-                                        desired_v = (tgt - pos).normalize_or_zero() * 2.5;
-                                    }
-                                }
-                                AiGoal::Investigate(wp) => {
-                                    if pos.distance(wp) < 2.0 {
-                                        mind.goal = AiGoal::Patrol;
-                                    } else {
-                                        desired_v = (wp - pos).normalize_or_zero() * 3.5;
-                                    }
-                                }
-                                AiGoal::Engage => {
-                                    if !same_loc_as_player || dist_p > 26.0 {
-                                        mind.goal = AiGoal::Patrol;
-                                    } else if dist_p > 1.8 {
-                                        desired_v = (player_pos - pos).normalize_or_zero() * 4.1;
-                                    } else if mind.attack_cooldown <= 0.0 {
-                                        mind.attack_cooldown = 1.15;
-                                        did_swing = true;
-                                        player_hit_dmg += 16.0 * self.cfg.lethality_mult;
-                                        player_knock += (player_pos - pos).normalize_or_zero()
-                                            * (6.5 * self.cfg.knockback_mult);
-                                    }
-                                }
-                                _ => {}
-                            }
-                        }
                         _ => {}
-                    }
-                    if let Some(g) = new_goal {
-                        mind.goal = g;
                     }
                 }
                 if let Some((wloc, wpos)) = npc_warp {
@@ -1544,12 +1419,6 @@ impl Universe {
                     self.entities[i].pos = wpos;
                     self.entities[i].vel = Vec2::ZERO;
                     continue;
-                }
-                if did_swing {
-                    self.entities[i].swing_timer = 0.25;
-                }
-                if let Some(ev) = speak_alert {
-                    alert_events.push(ev);
                 }
                 let cur = self.entities[i].vel;
                 self.entities[i].vel = cur.lerp(desired_v, (6.0 * dt).min(1.0));
@@ -1564,14 +1433,27 @@ impl Universe {
 
             match e_loc {
                 Location::Overworld => {
-                    let (_, tk) = sample_terrain(self.cfg.world_seed, next.x, next.y);
+                    next = self.world_stream.clamp_local(next);
+                    let tk = self.world_stream.terrain_at(next);
                     if tk == TerrainKind::LochWater {
                         next = prev;
                         self.entities[i].vel.x =
                             -self.entities[i].vel.x * self.cfg.global_restitution_mult;
                     }
-                    next.x = next.x.clamp(-38.0, 44.0);
-                    next.y = next.y.clamp(-38.0, 38.0);
+                    if self
+                        .ldtk_collision_world
+                        .as_ref()
+                        .map(|world| {
+                            world.is_solid_world_pos(
+                                next.x,
+                                next.y,
+                                self.entities[i].z.round() as i32,
+                            )
+                        })
+                        .unwrap_or(false)
+                    {
+                        next = prev;
+                    }
                     for b in &self.buildings {
                         next = b.resolve_exterior_collision(prev, next, 0.45);
                     }
@@ -1604,6 +1486,14 @@ impl Universe {
                 }
             }
 
+            let distance = next.distance(prev);
+            if matches!(
+                kind,
+                EntityKind::Player | EntityKind::Villager | EntityKind::Mount | EntityKind::Deer
+            ) {
+                self.entities[i].walk_phase = (self.entities[i].walk_phase + distance * 5.2)
+                    .rem_euclid(std::f32::consts::TAU);
+            }
             self.entities[i].pos = next;
             if !self.entities[i].alive {
                 self.entities[i].vel *= (1.0 - 6.0 * self.cfg.global_friction_mult * dt).max(0.0);
@@ -1620,6 +1510,7 @@ impl Universe {
                     self.entities[mi].location = p_loc;
                     self.entities[mi].pos = ppos;
                     self.entities[mi].facing = pface;
+                    self.entities[mi].walk_phase = self.entities[pi].walk_phase;
                 }
             }
             if let Some(cid) = self.entities[pi].carrying_id {
@@ -1628,30 +1519,20 @@ impl Universe {
                     self.entities[ci].pos = ppos + Vec2::new(0.0, -0.35);
                 }
             }
-            if player_hit_dmg > 0.0 || player_knock.length_squared() > 0.01 {
-                self.entities[pi].health -= player_hit_dmg;
-                self.entities[pi].vel += player_knock;
-                if player_hit_dmg > 0.0 {
-                    AudioBank::play(&sfx.steel, 0.4);
-                    self.entities[pi].bleed_rate += 0.9 * self.cfg.bleed_rate_mult;
-                    self.entities[pi].blood_stain =
-                        (self.entities[pi].blood_stain + 0.25).min(1.0);
-                }
-            }
             if self.entities[pi].health <= 0.0 {
                 match self.cfg.defeat_mode {
-                    DefeatMode::CaptivityTimeSkip => {
+                    DefeatMode::RecoveryTimeSkip => {
                         self.weather.day_count += self.cfg.defeat_time_skip_days;
+                        self.weather.set_time_to_hour(7.0);
                         self.entities[pi].health = 65.0;
+                        self.entities[pi].stamina = 100.0;
                         self.entities[pi].bleed_rate = 0.0;
-                        self.entities[pi].location = Location::Interior(1);
-                        self.entities[pi].pos = Vec2::new(3.4, 3.6);
                         self.entities[pi].mounted_id = None;
                         self.entities[pi].carrying_id = None;
-                        let scar = format!("Day {} Garrison Clash Scar", self.weather.day_count);
+                        let scar = format!("Day {} Recovery Scar", self.weather.day_count);
                         self.scars.push(scar.clone());
                         self.ledger.push(DeltaEntry::ScarEarned(scar));
-                        self.toast("Left for dead by the Garrison. 3 days passed before clan kin carried you home to your bothy.");
+                        self.toast("You recovered at the Pine-Edge hearth after a long rest.");
                     }
                     DefeatMode::KnockoutBounce => {
                         self.entities[pi].health = 100.0;
@@ -1660,12 +1541,6 @@ impl Universe {
                     }
                 }
             }
-        }
-
-        for (name, dialect, found_rope) in alert_events {
-            self.utterances
-                .push(compose_redcoat_alert(&name, found_rope, dialect));
-            AudioBank::play(&sfx.voice_bark, 0.5);
         }
 
         self.entities
@@ -1722,14 +1597,18 @@ impl Universe {
                         swing_timer: 0.0,
                         recoil_timer: 0.0,
                         trace_accum: 0.0,
+                        walk_phase: 0.0,
+                        posture: MicroState::default(),
+                        inventory: None,
                         mind: None,
                     });
                 }
-                DeltaEntry::GarrisonAlert(v) => {
-                    self.clans[1].alert_level = *v;
-                }
+                DeltaEntry::GarrisonAlert(_) => {}
                 DeltaEntry::ScarEarned(s) => {
                     self.scars.push(s.clone());
+                }
+                DeltaEntry::FoliageChopped(id) => {
+                    self.world_stream.chop_foliage(*id);
                 }
             }
         }

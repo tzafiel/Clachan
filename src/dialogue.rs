@@ -3,10 +3,7 @@ use crate::config::DialectId;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MemoryKind {
     SawBurial,
-    SawCutRope,
-    FoundEmptyGibbet,
-    SawBloodyPlayer,
-    HeardGunfire,
+    HeardWhistle,
     SharedHearth,
     GossipHonored,
 }
@@ -48,13 +45,18 @@ impl MemoryRing {
     }
 
     pub fn net_trust(&self) -> f32 {
-        self.slots.iter().map(|m| m.weight).sum::<f32>().clamp(-1.0, 1.0)
+        self.slots
+            .iter()
+            .map(|m| m.weight)
+            .sum::<f32>()
+            .clamp(-1.0, 1.0)
     }
 }
 
 #[derive(Clone, Debug)]
 pub struct UtteranceOutput {
     pub speaker: String,
+    pub gaelic: String,
     pub text: String,
     pub volume_db: f32,
     pub formant_f0: f32,
@@ -65,7 +67,7 @@ pub struct UtteranceOutput {
 
 pub fn apply_dialect(base: &str, dialect: DialectId) -> String {
     match dialect {
-        DialectId::Highland1744 => {
+        DialectId::HighlandGaelic => {
             let mut s = base.to_string();
             let swaps = [
                 ("cannot", "canna"),
@@ -87,7 +89,6 @@ pub fn apply_dialect(base: &str, dialect: DialectId) -> String {
             }
             s
         }
-        DialectId::RedcoatMilitary => format!("Halt! {}", base),
         DialectId::PartyAnnouncer => format!("WHOA! {}!", base.to_uppercase()),
     }
 }
@@ -100,51 +101,62 @@ pub fn compose_villager_line(
     player_blood: f32,
     era_darkness: f32,
 ) -> UtteranceOutput {
-    let greeting = if rain > 0.35 {
-        "A bitter wet squall from the loch."
+    let (gaelic_greet, eng_greet) = if rain > 0.35 {
+        (
+            "Tha an t-uisge trom a' tighinn far a' bheinn.",
+            "Heavy rain is rolling down off the ridge.",
+        )
     } else if era_darkness > 0.45 {
-        "Dark clouds gather over Lochaber."
+        (
+            "Tha an ceò a' laighe air a' choille an-diugh.",
+            "The mist lies thick across the pinewood today.",
+        )
     } else {
-        "Fair morning across the glen."
+        (
+            "Fàilte dhan choille, a Fhir-Faire.",
+            "Welcome to the wood, Way-Warden.",
+        )
     };
 
-    let middle = if player_blood > 0.35 {
-        "You carry fresh blood on your wool — I do not know what trouble followed you home."
+    let (gaelic_body, eng_body) = if player_blood > 0.35 {
+        (
+            "Tha fuil air do bhreacan — thig faisg air an teine.",
+            "There is blood on your plaid — come rest beside the hearth.",
+        )
     } else if memories.has(MemoryKind::SawBurial) || memories.has(MemoryKind::GossipHonored) {
-        "Word reached the clachan that you laid the hanged lad beneath a proper stone cairn. Take warmth by our hearth whenever you need."
-    } else if memories.has(MemoryKind::HeardGunfire) {
-        "Black powder echoed down Wade's Road — keep your dirk close."
+        (
+            "Chuala a' chlachan mun chàrn a thog thu. Tha àite agad ri taobh ar teine.",
+            "Word reached the glens of the stone cairn you raised. You always have a place by our fire.",
+        )
+    } else if memories.has(MemoryKind::HeardWhistle) {
+        (
+            "Chuala sinn do ghlaodh air Bramble — tha e dlùth dhut.",
+            "We heard you call for Bramble — that horse is close to you.",
+        )
     } else {
-        "Two Highland kin still hang on the King's road east of here. Nobody dares cut the hemp while the Redcoats march."
+        (
+            "Cha do dhìochuimhnich na clachan an t-seann rathad. Gabh do thìde.",
+            "The standing stones have not forgotten the old road. Take your time.",
+        )
     };
 
-    let raw = format!("{} {}", greeting, middle);
-    let text = apply_dialect(&raw, dialect);
-    let f0 = if dialect == DialectId::PartyAnnouncer { 230.0 } else { 135.0 };
+    let gaelic = format!("{} {}", gaelic_greet, gaelic_body);
+    let raw_english = format!("{} {}", eng_greet, eng_body);
+    let text = apply_dialect(&raw_english, dialect);
+    let f0 = if dialect == DialectId::PartyAnnouncer {
+        230.0
+    } else {
+        135.0
+    };
+
     UtteranceOutput {
         speaker: speaker.to_string(),
+        gaelic,
         text,
         volume_db: 58.0,
         formant_f0: f0,
         formant_f1: 540.0,
         formant_f2: 1480.0,
-        ttl: 6.5,
-    }
-}
-
-pub fn compose_redcoat_alert(speaker: &str, found_rope: bool, dialect: DialectId) -> UtteranceOutput {
-    let base = if found_rope {
-        "Someone severed the gibbet rope with clean steel! Put the ridge on alert!"
-    } else {
-        "Keep your steel sheathed, Highlander, or answer to Fort William!"
-    };
-    UtteranceOutput {
-        speaker: speaker.to_string(),
-        text: apply_dialect(base, dialect),
-        volume_db: 86.0,
-        formant_f0: 118.0,
-        formant_f1: 620.0,
-        formant_f2: 1320.0,
-        ttl: 5.5,
+        ttl: 8.5,
     }
 }

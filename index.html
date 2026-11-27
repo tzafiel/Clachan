@@ -1,29 +1,224 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>Clachan</title>
-  <link rel="manifest" href="./manifest.json" />
-  <style>
-    html, body, canvas {
-      margin: 0;
-      padding: 0;
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      background: #161816;
-    }
-  </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>An Tìr Shàmhach — The Quiet Land</title>
+  <meta name="description" content="An Tìr Shàmhach (The Quiet Land) — A handcrafted 2D Hi-Bit Living-World Wayfarer RPG anchored in Scottish Gaelic folklore, deep wilds, and sacred time." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,600;1,400&family=Silkscreen:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
 </head>
-<body>
-  <canvas id="glcanvas" tabindex="1"></canvas>
-  <script src="https://not-fl3.github.io/miniquad-samples/mq_js_bundle.js"></script>
-  <script>
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("./sw.js").catch(() => {});
-    }
-    load("./clachan.wasm");
-  </script>
+<body data-sky="dusk">
+  <!-- Living 1:1 Local-Time Sky & Mist Hero Window -->
+  <header class="hero-window" id="hearth">
+    <div class="sky-layer" aria-hidden="true"></div>
+    <div class="stars-layer" aria-hidden="true"></div>
+    <div class="mist-layer mist-back" aria-hidden="true"></div>
+    <div class="mist-layer mist-front" aria-hidden="true"></div>
+    <div class="embers-layer" id="embersLayer" aria-hidden="true"></div>
+
+    <!-- Top Clock / Gaelic Time Stamp -->
+    <div class="top-bar">
+      <div class="time-stamp" id="timeStamp" title="Synced 1:1 to your local clock">
+        <span class="time-dot"></span>
+        <span id="gaelicTime">Feasgar</span> · <span id="localClock">--:--</span>
+      </div>
+      <div class="sky-preview" aria-label="Preview time of day">
+        <button type="button" data-preview="dawn">Dawn</button>
+        <button type="button" data-preview="day">Day</button>
+        <button type="button" data-preview="dusk">Dusk</button>
+        <button type="button" data-preview="night">Night</button>
+        <button type="button" data-preview="auto" class="active">Live</button>
+      </div>
+    </div>
+
+    <!-- Official Hi-Bit Nameplate + Perched Seabhag-Fàire Courier -->
+    <div class="hero-stage">
+      <div class="sign-wrapper">
+        <img
+          src="site_assets/nameplate.jpg"
+          alt="An Tìr Shàmhach — The Quiet Land"
+          class="nameplate pixel-art"
+        />
+
+        <!-- Clickable Seabhag-Fàire perched on the corner with latest oil-stained dispatch -->
+        <button
+          type="button"
+          class="courier-perch"
+          id="openLatestDispatch"
+          aria-label="Read the latest oil-stained Seabhag-Fàire dispatch"
+        >
+          <span class="dispatch-pill">New Oil-Stained Scroll</span>
+          <img
+            src="site_assets/seabhag.jpg"
+            alt="Seabhag-Fàire Watch-Falcon perched with a scroll tube"
+            class="courier-sprite pixel-art"
+          />
+        </button>
+      </div>
+
+      <p class="hero-pitch">
+        A handcrafted 2D Hi-Bit living-world Wayfarer RPG built in Rust.<br />
+        No quest markers. No sleep bars. No publishers. Just mist, stone, timber, and a continent that keeps its own time.
+      </p>
+
+      <div class="hero-actions">
+        <a href="play/" class="btn btn-primary">Step Into the Mist (Pre-Release)</a>
+        <a href="#dispatches" class="btn btn-secondary">Read the Watch-Falcon Post</a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Ledger Ribbon Navigation -->
+  <nav class="ribbon-nav" aria-label="Primary sections">
+    <a href="#hearth" class="ribbon ribbon-peat">The Hearth</a>
+    <a href="#dispatches" class="ribbon ribbon-rowan">Seabhag-Fàire Post</a>
+    <a href="#chronicle" class="ribbon ribbon-moss">Chronicle &amp; Builds</a>
+    <a href="#support" class="ribbon ribbon-heather">Support the Quiet Land</a>
+  </nav>
+
+  <main class="ledger-shell">
+    <!-- Section 1: World Pitch (Strict Hearth Lore Only) -->
+    <section class="ledger-card intro-grid">
+      <div class="ledger-col">
+        <span class="gaelic-kicker">Fàilte dhan Tìr Shàmhach</span>
+        <h2>Walk the Glens at Your Own Pace</h2>
+        <p>
+          Far out in the North Atlantic mist lies a continent larger than Scotland—unmapped, untouched by the frantic machinery that collapsed across the sea, and governed by weather, tides, and honest craft.
+        </p>
+        <p>
+          Step into your great-plaid as a <strong>Way-Warden</strong> (<em>Fear-Faire</em> / <em>Bean-Faire</em>). Track original endemic wildlife through wet pine moss, pitch camp anywhere beneath the stars, sail open water, carve <em>Sia-Clachan</em> hex tiles for your sporran, and weave real-life friends' homesteads directly into your world.
+        </p>
+      </div>
+      <div class="ledger-col pillars-box">
+        <h3 class="pixel-subhead">Built Different</h3>
+        <ul class="pillar-list">
+          <li><strong>1:1 Real-Time World:</strong> Local-time skies, shifting storms, and mountain snowmelt that feeds every burn, loch, and sea current.</li>
+          <li><strong>Paired Gaelic &amp; English:</strong> Authentic <em>Gàidhlig</em> dialogue paired cleanly with English underneath.</li>
+          <li><strong>Zero Hand-Holding:</strong> No floating boss bars, no checklist counters, and no forced tutorials. Discovery stays earned.</li>
+          <li><strong>Physical Bird-Post:</strong> Send written notes and keepsakes to friends' bothies via your <em>Seabhag-Fàire</em> falcon.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- Section 2: Weekly Oil-Stained Seabhag-Fàire Dispatches -->
+    <section class="ledger-card" id="dispatches">
+      <div class="section-head">
+        <div>
+          <span class="gaelic-kicker">Post na Seabhag-Fàire</span>
+          <h2>Weekly Oil-Stained Dispatches</h2>
+        </div>
+        <p class="section-note">
+          One found journal fragment, field sketch, or tavern ballad dropped every week—wrapped in waxed oilskin against the Atlantic spray.
+        </p>
+      </div>
+
+      <div class="dispatch-grid" id="dispatchGrid">
+        <!-- Populated automatically from dispatches/entries.json -->
+      </div>
+
+      <!-- Free Email List Hook (Buttondown / Kit ready) -->
+      <div class="roost-signup">
+        <div class="roost-copy">
+          <h3 class="pixel-subhead">Hang a Roost-Box at Your Door</h3>
+          <p>
+            Join the Watch-Falcon list to receive each weekly oil-stained dispatch and playable build alert straight to your inbox. Zero spam, zero algorithms.
+          </p>
+        </div>
+        <!-- Replace action URL with your free Buttondown or Kit form endpoint -->
+        <form
+          class="roost-form"
+          action="https://buttondown.com/api/emails/embed-subscribe/YOUR_USERNAME"
+          method="post"
+          target="popupwindow"
+        >
+          <input
+            type="email"
+            name="email"
+            required
+            placeholder="wayfarer@example.com"
+            aria-label="Email address"
+          />
+          <button type="submit" class="btn btn-primary">Tie the Hearth Bead</button>
+        </form>
+      </div>
+    </section>
+
+    <!-- Section 3: Devlog & Playable Builds -->
+    <section class="ledger-card" id="chronicle">
+      <span class="gaelic-kicker">An Leabhar-Latha</span>
+      <h2>The Chronicle &amp; Playable Pre-Releases</h2>
+      <div class="chronicle-grid">
+        <article class="build-panel">
+          <span class="status-tag">In Forging — Phase 1</span>
+          <h3>Oir na Giùthsaich (Pine-Edge Slice)</h3>
+          <p>
+            Native <code>640×360</code> Hi-Bit Rust + <code>macroquad</code> engine. Dialing in <code>32×32</code> moss-and-pine terrain, <code>64×64</code> Way-Warden movement, rain-hood cloak animations, persistent peat footprints, and paired Gaelic/English dialogue.
+          </p>
+          <div class="build-links">
+            <a href="play/" class="btn btn-primary">Browser WASM Frame</a>
+            <!-- Replace # with your itch.io page URL once live -->
+            <a href="#" class="btn btn-secondary" aria-disabled="true">itch.io Builds (Coming Soon)</a>
+          </div>
+        </article>
+
+        <article class="build-panel">
+          <span class="status-tag">Community Ceilidh</span>
+          <h3>Gather Around the Peat Fire</h3>
+          <p>
+            Swap theories on the weekly dispatches, playtest early builds of the <em>Sia-Clachan</em> sporran hex-tile game, and meet fellow Wayfarers preparing to weave clans when the mist parts.
+          </p>
+          <div class="build-links">
+            <!-- Replace # with your permanent Discord invite -->
+            <a href="#" class="btn btn-secondary">Join the Discord Ceilidh</a>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- Section 4: Independence & Donations -->
+    <section class="ledger-card support-card" id="support">
+      <span class="gaelic-kicker">Saor bho Bhlàr is Bùth</span>
+      <h2>100% Independent. Forever 2D Flagship.</h2>
+      <p>
+        <em>An Tìr Shàmhach</em> is built solo from the ground up with zero publisher oversight, zero corporate buyouts, and zero creative strings attached. Every dollar goes straight into art, sound, and keeping this world alive and expanding for a decade to come.
+      </p>
+      <div class="hero-actions">
+        <!-- Replace # with your Ko-fi / Stripe link -->
+        <a href="#" class="btn btn-primary">Support on Ko-fi (0% Platform Cut)</a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <p>
+      <strong>An Tìr Shàmhach</strong> · Hand-crafted in Rust · Hosted free on GitHub Pages
+    </p>
+    <p class="footer-sub">
+      "Cha tig an t-sàmhchair le cabhag." — <em>Stillness does not come in a hurry.</em>
+    </p>
+  </footer>
+
+  <!-- Oil-Stained Parchment Dispatch Reader Modal -->
+  <div class="modal-backdrop" id="dispatchModal" hidden>
+    <article class="parchment-modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <button type="button" class="modal-close" id="closeModal" aria-label="Close scroll">✕</button>
+      <div class="parchment-meta">
+        <span id="modalWeather">Weather: Mist</span>
+        <span id="modalDate">Dispatch #01</span>
+      </div>
+      <p class="modal-gaelic" id="modalGaelic"></p>
+      <h2 id="modalTitle"></h2>
+      <div class="parchment-body" id="modalBody"></div>
+      <div class="parchment-footer">
+        <span id="modalSignoff"></span>
+        <span class="wax-seal" aria-hidden="true">SF</span>
+      </div>
+    </article>
+  </div>
+
+  <script src="app.js"></script>
 </body>
 </html>

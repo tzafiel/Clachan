@@ -1,0 +1,62 @@
+{
+    "Highlander": (
+        sprite_path: "assets/sprites/warden_base.png",
+        frame_size: (64, 64),
+        foot_offset_y: 1.9,
+        collider: Some((-0.32, -0.3, 0.64, 0.6)),
+    ),
+    "Horse": (
+        sprite_path: "assets/bramble.png",
+        frame_size: (64, 64),
+        foot_offset_y: 1.9,
+        collider: Some((-0.65, -0.35, 1.3, 0.7)),
+    ),
+    "Bothy": (
+        sprite_path: "assets/buildings.png",
+        frame_size: (256, 192),
+        foot_offset_y: 5.5,
+        collider: Some((-3.5, -2.0, 7.0, 4.0)),
+    ),
+    "ScotsPine": (
+        sprite_path: "assets/trees.png",
+        frame_size: (64, 96),
+        foot_offset_y: 0.45,
+        collider: Some((-0.35, -0.25, 0.7, 0.5)),
+    ),
+    "RedStag": (
+        sprite_path: "assets/deer.png",
+        frame_size: (64, 64),
+        foot_offset_y: 1.9,
+        collider: Some((-0.45, -0.3, 0.9, 0.6)),
+    ),
+    "Rock": (
+        sprite_path: "assets/props.png",
+        frame_size: (32, 64),
+        foot_offset_y: 1.9,
+        collider: Some((-0.45, -0.4, 0.9, 0.8)),
+    ),
+    "Portal": (
+        sprite_path: "assets/props.png",
+        frame_size: (64, 64),
+        foot_offset_y: 1.8,
+        collider: None,
+    ),
+    "Artifact": (
+        sprite_path: "assets/props.png",
+        frame_size: (32, 32),
+        foot_offset_y: 0.9,
+        collider: None,
+    ),
+    "Campfire": (
+        sprite_path: "assets/props.png",
+        frame_size: (32, 32),
+        foot_offset_y: 0.9,
+        collider: None,
+    ),
+    "Hearth": (
+        sprite_path: "assets/props.png",
+        frame_size: (32, 32),
+        foot_offset_y: 0.9,
+        collider: None,
+    ),
+}

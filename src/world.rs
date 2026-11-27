@@ -1,10 +1,41 @@
 use crate::config::UniverseConfig;
+use chrono::{Datelike, Local, Timelike};
 use macroquad::prelude::Vec2;
+
+pub const TILE_SIZE_M: f32 = 1.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Location {
     Overworld,
     Interior(u32),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize)]
+pub enum Season {
+    Spring,
+    Summer,
+    Autumn,
+    Winter,
+}
+
+impl Season {
+    pub fn from_month(month: u32) -> Self {
+        match month {
+            3..=5 => Self::Spring,
+            6..=8 => Self::Summer,
+            9..=11 => Self::Autumn,
+            _ => Self::Winter,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WeatherMode {
+    Natural,
+    Clear,
+    Mist,
+    Rain,
+    Snow,
 }
 
 #[derive(Clone, Debug)]
@@ -83,6 +114,7 @@ pub enum TerrainKind {
     Heather,
     Meadow,
     GraniteCrag,
+    TilledSoil,
 }
 
 pub fn road_center_x(y: f32) -> f32 {
@@ -121,56 +153,150 @@ pub fn sample_terrain(seed: u64, x: f32, y: f32) -> (f32, TerrainKind) {
 #[derive(Clone, Debug)]
 pub struct WeatherState {
     pub day_count: u32,
+    pub season: Season,
     pub time_of_day: f32,
+    pub time_offset_hours: f32,
     pub sun_warmth: f32,
     pub sun_dir: Vec2,
     pub wind_vec: Vec2,
     pub rain_intensity: f32,
+    pub snow_intensity: f32,
     pub mist_intensity: f32,
     pub ambient_temp_k: f32,
+    pub weather_mode: WeatherMode,
 }
 
 impl WeatherState {
     pub fn new(cfg: &UniverseConfig) -> Self {
+        let now = Local::now();
         Self {
-            day_count: 1,
-            time_of_day: 0.36,
+            day_count: now.ordinal(),
+            season: Season::from_month(now.month()),
+            time_of_day: local_time_of_day(0.0),
+            time_offset_hours: 0.0,
             sun_warmth: 0.9,
             sun_dir: Vec2::new(0.65, 0.45),
             wind_vec: Vec2::new(cfg.base_wind_mps, 1.2),
-            rain_intensity: if cfg.rain_probability > 0.5 { 0.55 } else { 0.0 },
+            rain_intensity: 0.0,
+            snow_intensity: 0.0,
             mist_intensity: cfg.mist_baseline,
             ambient_temp_k: cfg.base_temp_kelvin,
+            weather_mode: WeatherMode::Natural,
         }
     }
 
     pub fn step(&mut self, dt: f32, cfg: &UniverseConfig) {
-        self.time_of_day += dt / cfg.day_length_sec.max(30.0);
-        if self.time_of_day >= 1.0 {
-            self.time_of_day -= 1.0;
-            self.day_count += 1;
-        }
+        let now = Local::now();
+        self.season = Season::from_month(now.month());
+        self.time_of_day = local_time_of_day(self.time_offset_hours);
         let angle = (self.time_of_day - 0.25) * std::f32::consts::TAU;
         let sun_h = angle.sin().clamp(-0.4, 1.0);
         self.sun_dir = Vec2::new(angle.cos() * 0.9, 0.35 + (1.0 - sun_h.max(0.0)) * 0.55);
         self.sun_warmth = (sun_h.max(0.0) * (1.0 - cfg.era_darkness * 0.65)).clamp(0.08, 1.0);
 
-        let w_phase = (self.day_count as f32 * 2.7 + self.time_of_day * 6.283).sin() * 0.5 + 0.5;
-        let target_rain = if w_phase < cfg.rain_probability {
+        let w_phase = (now.ordinal() as f32 * 2.7 + self.time_of_day * 6.283).sin() * 0.5 + 0.5;
+        let natural_precipitation = if w_phase < cfg.rain_probability {
             ((cfg.rain_probability - w_phase) / cfg.rain_probability.max(0.05)).clamp(0.15, 1.0)
         } else {
             0.0
         };
-        self.rain_intensity += (target_rain - self.rain_intensity) * (dt * 0.35).min(1.0);
-        self.mist_intensity =
-            (cfg.mist_baseline + self.rain_intensity * 0.28 + (1.0 - sun_h.max(0.0)) * 0.15)
+        let (target_rain, target_snow, target_mist) = match self.weather_mode {
+            WeatherMode::Natural => {
+                if self.season == Season::Winter {
+                    (
+                        natural_precipitation * 0.3,
+                        natural_precipitation * 0.7,
+                        cfg.mist_baseline,
+                    )
+                } else {
+                    (natural_precipitation, 0.0, cfg.mist_baseline)
+                }
+            }
+            WeatherMode::Clear => (0.0, 0.0, 0.0),
+            WeatherMode::Mist => (0.0, 0.0, 0.72),
+            WeatherMode::Rain => (0.75, 0.0, cfg.mist_baseline),
+            WeatherMode::Snow => (0.0, 0.75, cfg.mist_baseline),
+        };
+        let smoothing = |current: f32, target: f32, rate: f32| {
+            current + (target - current) * (1.0 - (-rate * dt.max(0.0)).exp())
+        };
+        self.rain_intensity = smoothing(self.rain_intensity, target_rain, 0.32);
+        self.snow_intensity = smoothing(self.snow_intensity, target_snow, 0.22);
+        let night_mist = if self.weather_mode == WeatherMode::Natural {
+            (1.0 - sun_h.max(0.0)) * 0.12
+        } else {
+            0.0
+        };
+        let mist_target =
+            (target_mist + self.rain_intensity * 0.28 + self.snow_intensity * 0.18 + night_mist)
                 .clamp(0.0, 0.85);
+        self.mist_intensity = smoothing(self.mist_intensity, mist_target, 0.18);
 
         let wind_ang = 0.25 + (self.time_of_day * 4.0).sin() * 0.45;
-        let wind_mag = cfg.base_wind_mps * (1.0 + self.rain_intensity * 0.6);
+        let wind_mag =
+            cfg.base_wind_mps * (1.0 + self.rain_intensity * 0.6 + self.snow_intensity * 0.25);
         self.wind_vec = Vec2::new(wind_ang.cos() * wind_mag, wind_ang.sin() * wind_mag);
 
-        self.ambient_temp_k = cfg.base_temp_kelvin + sun_h * 5.0 - self.rain_intensity * 3.5;
+        let seasonal_offset = match self.season {
+            Season::Spring => -2.0,
+            Season::Summer => 2.0,
+            Season::Autumn => -4.0,
+            Season::Winter => -10.0,
+        };
+        self.ambient_temp_k = cfg.base_temp_kelvin + seasonal_offset + sun_h * 5.0
+            - self.rain_intensity * 3.5
+            - self.snow_intensity * 2.0;
+    }
+
+    pub fn cycle_weather_mode(&mut self) {
+        self.weather_mode = match self.weather_mode {
+            WeatherMode::Natural | WeatherMode::Snow => WeatherMode::Clear,
+            WeatherMode::Clear => WeatherMode::Mist,
+            WeatherMode::Mist => WeatherMode::Rain,
+            WeatherMode::Rain => WeatherMode::Snow,
+        };
+    }
+
+    pub fn set_time_to_hour(&mut self, target_hour: f32) {
+        self.time_offset_hours = target_hour.rem_euclid(24.0) - local_hour();
+        self.time_of_day = target_hour.rem_euclid(24.0) / 24.0;
+    }
+}
+
+fn local_hour() -> f32 {
+    let now = Local::now();
+    now.hour() as f32 + now.minute() as f32 / 60.0 + now.second() as f32 / 3600.0
+}
+
+fn local_time_of_day(offset_hours: f32) -> f32 {
+    (local_hour() + offset_hours).rem_euclid(24.0) / 24.0
+}
+
+#[cfg(test)]
+mod season_tests {
+    use super::{Season, UniverseConfig, WeatherMode, WeatherState};
+
+    #[test]
+    fn season_matches_local_calendar_months() {
+        assert_eq!(Season::from_month(3), Season::Spring);
+        assert_eq!(Season::from_month(6), Season::Summer);
+        assert_eq!(Season::from_month(9), Season::Autumn);
+        assert_eq!(Season::from_month(12), Season::Winter);
+        assert_eq!(Season::from_month(0), Season::Winter);
+    }
+
+    #[test]
+    fn real_time_offset_stays_in_day_and_weather_transitions_smoothly() {
+        let config = UniverseConfig::pine_edge();
+        let mut weather = WeatherState::new(&config);
+        weather.time_offset_hours = 3.0;
+        weather.weather_mode = WeatherMode::Rain;
+
+        weather.step(1.0 / 60.0, &config);
+
+        assert!((0.0..1.0).contains(&weather.time_of_day));
+        assert!(weather.rain_intensity > 0.0 && weather.rain_intensity < 0.75);
+        assert_eq!(weather.snow_intensity, 0.0);
     }
 }
 
@@ -349,11 +475,51 @@ pub fn generate_clachan_buildings() -> Vec<BuildingRecord> {
             int_exit: Vec2::new(5.5, 7.35),
             int_hearth: Vec2::new(5.5, 1.55),
             props: vec![
-                InteriorProp { kind: PropKind::Rug, x: 3.7, y: 3.3, w: 3.6, h: 2.3, solid: false, prompt: String::new() },
-                InteriorProp { kind: PropKind::Bed, x: 1.0, y: 2.1, w: 1.8, h: 2.6, solid: true, prompt: "[E] Sleep until Dawn".to_string() },
-                InteriorProp { kind: PropKind::Table, x: 7.4, y: 2.8, w: 2.1, h: 1.4, solid: true, prompt: String::new() },
-                InteriorProp { kind: PropKind::WeaponRack, x: 8.4, y: 1.35, w: 1.6, h: 0.65, solid: true, prompt: "[E] Check Gear".to_string() },
-                InteriorProp { kind: PropKind::Barrel, x: 1.0, y: 5.5, w: 0.9, h: 0.9, solid: true, prompt: String::new() },
+                InteriorProp {
+                    kind: PropKind::Rug,
+                    x: 3.7,
+                    y: 3.3,
+                    w: 3.6,
+                    h: 2.3,
+                    solid: false,
+                    prompt: String::new(),
+                },
+                InteriorProp {
+                    kind: PropKind::Bed,
+                    x: 1.0,
+                    y: 2.1,
+                    w: 1.8,
+                    h: 2.6,
+                    solid: true,
+                    prompt: "[E] Sleep until Dawn".to_string(),
+                },
+                InteriorProp {
+                    kind: PropKind::Table,
+                    x: 7.4,
+                    y: 2.8,
+                    w: 2.1,
+                    h: 1.4,
+                    solid: true,
+                    prompt: String::new(),
+                },
+                InteriorProp {
+                    kind: PropKind::WeaponRack,
+                    x: 8.4,
+                    y: 1.35,
+                    w: 1.6,
+                    h: 0.65,
+                    solid: true,
+                    prompt: "[E] Check Gear".to_string(),
+                },
+                InteriorProp {
+                    kind: PropKind::Barrel,
+                    x: 1.0,
+                    y: 5.5,
+                    w: 0.9,
+                    h: 0.9,
+                    solid: true,
+                    prompt: String::new(),
+                },
             ],
         },
         BuildingRecord {
@@ -372,11 +538,51 @@ pub fn generate_clachan_buildings() -> Vec<BuildingRecord> {
             int_exit: Vec2::new(6.0, 7.85),
             int_hearth: Vec2::new(2.6, 1.65),
             props: vec![
-                InteriorProp { kind: PropKind::Forge, x: 1.4, y: 1.35, w: 2.4, h: 1.2, solid: true, prompt: "[E] Stoke Forge".to_string() },
-                InteriorProp { kind: PropKind::Anvil, x: 4.5, y: 3.4, w: 1.3, h: 0.85, solid: true, prompt: "[E] Hone Dirk at Anvil".to_string() },
-                InteriorProp { kind: PropKind::WeaponRack, x: 8.5, y: 1.4, w: 2.4, h: 0.75, solid: true, prompt: String::new() },
-                InteriorProp { kind: PropKind::Table, x: 8.4, y: 4.4, w: 2.2, h: 1.3, solid: true, prompt: String::new() },
-                InteriorProp { kind: PropKind::Barrel, x: 1.3, y: 5.6, w: 0.95, h: 0.95, solid: true, prompt: String::new() },
+                InteriorProp {
+                    kind: PropKind::Forge,
+                    x: 1.4,
+                    y: 1.35,
+                    w: 2.4,
+                    h: 1.2,
+                    solid: true,
+                    prompt: "[E] Stoke Forge".to_string(),
+                },
+                InteriorProp {
+                    kind: PropKind::Anvil,
+                    x: 4.5,
+                    y: 3.4,
+                    w: 1.3,
+                    h: 0.85,
+                    solid: true,
+                    prompt: "[E] Hone Dirk at Anvil".to_string(),
+                },
+                InteriorProp {
+                    kind: PropKind::WeaponRack,
+                    x: 8.5,
+                    y: 1.4,
+                    w: 2.4,
+                    h: 0.75,
+                    solid: true,
+                    prompt: String::new(),
+                },
+                InteriorProp {
+                    kind: PropKind::Table,
+                    x: 8.4,
+                    y: 4.4,
+                    w: 2.2,
+                    h: 1.3,
+                    solid: true,
+                    prompt: String::new(),
+                },
+                InteriorProp {
+                    kind: PropKind::Barrel,
+                    x: 1.3,
+                    y: 5.6,
+                    w: 0.95,
+                    h: 0.95,
+                    solid: true,
+                    prompt: String::new(),
+                },
             ],
         },
         BuildingRecord {
@@ -395,12 +601,60 @@ pub fn generate_clachan_buildings() -> Vec<BuildingRecord> {
             int_exit: Vec2::new(7.0, 8.85),
             int_hearth: Vec2::new(2.8, 1.6),
             props: vec![
-                InteriorProp { kind: PropKind::Rug, x: 1.8, y: 2.8, w: 3.4, h: 2.4, solid: false, prompt: String::new() },
-                InteriorProp { kind: PropKind::BarCounter, x: 7.6, y: 2.7, w: 4.8, h: 1.15, solid: true, prompt: "[E] Drink Warm Ale".to_string() },
-                InteriorProp { kind: PropKind::Barrel, x: 11.6, y: 1.45, w: 0.95, h: 0.95, solid: true, prompt: String::new() },
-                InteriorProp { kind: PropKind::Barrel, x: 10.4, y: 1.45, w: 0.95, h: 0.95, solid: true, prompt: String::new() },
-                InteriorProp { kind: PropKind::Table, x: 2.2, y: 5.6, w: 2.3, h: 1.3, solid: true, prompt: String::new() },
-                InteriorProp { kind: PropKind::Table, x: 9.2, y: 5.8, w: 2.3, h: 1.3, solid: true, prompt: String::new() },
+                InteriorProp {
+                    kind: PropKind::Rug,
+                    x: 1.8,
+                    y: 2.8,
+                    w: 3.4,
+                    h: 2.4,
+                    solid: false,
+                    prompt: String::new(),
+                },
+                InteriorProp {
+                    kind: PropKind::BarCounter,
+                    x: 7.6,
+                    y: 2.7,
+                    w: 4.8,
+                    h: 1.15,
+                    solid: true,
+                    prompt: "[E] Drink Warm Ale".to_string(),
+                },
+                InteriorProp {
+                    kind: PropKind::Barrel,
+                    x: 11.6,
+                    y: 1.45,
+                    w: 0.95,
+                    h: 0.95,
+                    solid: true,
+                    prompt: String::new(),
+                },
+                InteriorProp {
+                    kind: PropKind::Barrel,
+                    x: 10.4,
+                    y: 1.45,
+                    w: 0.95,
+                    h: 0.95,
+                    solid: true,
+                    prompt: String::new(),
+                },
+                InteriorProp {
+                    kind: PropKind::Table,
+                    x: 2.2,
+                    y: 5.6,
+                    w: 2.3,
+                    h: 1.3,
+                    solid: true,
+                    prompt: String::new(),
+                },
+                InteriorProp {
+                    kind: PropKind::Table,
+                    x: 9.2,
+                    y: 5.8,
+                    w: 2.3,
+                    h: 1.3,
+                    solid: true,
+                    prompt: String::new(),
+                },
             ],
         },
         BuildingRecord {
@@ -419,9 +673,33 @@ pub fn generate_clachan_buildings() -> Vec<BuildingRecord> {
             int_exit: Vec2::new(6.0, 7.85),
             int_hearth: Vec2::new(9.6, 1.6),
             props: vec![
-                InteriorProp { kind: PropKind::CellBars, x: 0.8, y: 1.6, w: 3.8, h: 3.1, solid: true, prompt: String::new() },
-                InteriorProp { kind: PropKind::Table, x: 6.2, y: 3.6, w: 2.4, h: 1.3, solid: true, prompt: String::new() },
-                InteriorProp { kind: PropKind::WeaponRack, x: 5.6, y: 1.4, w: 2.5, h: 0.7, solid: true, prompt: String::new() },
+                InteriorProp {
+                    kind: PropKind::CellBars,
+                    x: 0.8,
+                    y: 1.6,
+                    w: 3.8,
+                    h: 3.1,
+                    solid: true,
+                    prompt: String::new(),
+                },
+                InteriorProp {
+                    kind: PropKind::Table,
+                    x: 6.2,
+                    y: 3.6,
+                    w: 2.4,
+                    h: 1.3,
+                    solid: true,
+                    prompt: String::new(),
+                },
+                InteriorProp {
+                    kind: PropKind::WeaponRack,
+                    x: 5.6,
+                    y: 1.4,
+                    w: 2.5,
+                    h: 0.7,
+                    solid: true,
+                    prompt: String::new(),
+                },
             ],
         },
     ]

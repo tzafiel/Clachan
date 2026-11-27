@@ -1,0 +1,12 @@
+(
+    id: "pine_edge",
+    gaelic_name: "Oir na Giùthsaich",
+    english_name: "The Pine-Edge",
+    day_ambient: (0.95, 0.97, 0.92),
+    rain_ambient: (0.74, 0.80, 0.86),
+    dusk_ambient: (0.78, 0.66, 0.58),
+    night_ambient: (0.34, 0.40, 0.52),
+    sunbeam_outer: (1.0, 0.97, 0.82, 0.24),
+    sunbeam_core: (1.0, 0.99, 0.88, 0.32),
+    clear_bg: (88, 138, 76),
+)

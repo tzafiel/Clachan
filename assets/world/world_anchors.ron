@@ -1,0 +1,42 @@
+// Clachan Master World Blueprint (256x256 chunks = 16,384x16,384 tiles, 5 Z-layers)
+(
+    world_seed: 1744,
+    chunk_size_tiles: 64,
+    world_chunks: (256, 256),
+    starting_chunk: (164, 136),
+
+    settlements: [
+        (id: "glen_albyn_croft", name: "Glen Albyn Starter Croft", chunk: (164, 136), radius: 2, faction: "Player", claimable: true),
+        (id: "edinburgh",        name: "Edinburgh (Auld Reekie)",  chunk: (188, 194), radius: 5, faction: "Crown",  claimable: false),
+        (id: "glasgow",          name: "Glasgow Shipyards",        chunk: (134, 192), radius: 5, faction: "Guild",  claimable: false),
+        (id: "stirling",         name: "Stirling Bridge & Castle", chunk: (158, 180), radius: 3, faction: "Crown",  claimable: false),
+        (id: "inverness",        name: "Inverness Garrison",       chunk: (168, 86),  radius: 4, faction: "Crown",  claimable: false),
+        (id: "eilean_keep",      name: "Tidal Island Keep",        chunk: (94, 128),  radius: 2, faction: "RivalClan", claimable: true),
+        (id: "east_cliff_fort",  name: "Dunnottar Cliff Fortress", chunk: (202, 122), radius: 2, faction: "Neutral",   claimable: true),
+        (id: "hebrides_cove",    name: "Stornoway Smuggler Cove",  chunk: (60, 82),   radius: 2, faction: "Smugglers", claimable: true),
+        (id: "munro_pass",       name: "Clan MacRae Stronghold",   chunk: (140, 68),  radius: 2, faction: "RivalClan", claimable: true),
+    ],
+
+    // Splines carved smoothly across chunks by the chunk streamer
+    roads: [
+        (id: "wades_military_road", width_tiles: 4, waypoints: [(158, 180), (162, 158), (164, 136), (166, 112), (168, 86)]),
+        (id: "royal_lowland_way",   width_tiles: 5, waypoints: [(134, 192), (158, 180), (174, 188), (188, 194)]),
+        (id: "rainforest_track",    width_tiles: 3, waypoints: [(164, 136), (138, 138), (114, 134), (94, 128)]),
+    ],
+
+    // Dynamic naval shipping & prevailing wind corridors
+    sea_lanes: [
+        (id: "atlantic_trade_route", waypoints: [(134, 192), (96, 194), (66, 170), (48, 126), (52, 72), (110, 26)]),
+        (id: "north_sea_patrol",     waypoints: [(188, 194), (226, 180), (228, 122), (212, 62), (168, 26)]),
+        (id: "corsair_run",          waypoints: [(60, 82), (34, 132), (42, 190), (88, 224)]),
+    ],
+
+    // Vertical World Portals connecting Z = 0 down to Z = -1, -2, -3
+    depth_portals: [
+        (id: "edinburgh_vaults",   from_z: 0,  to_z: -1, chunk: (188, 194), kind: "CityVaults"),
+        (id: "rainforest_sinkhole",from_z: 0,  to_z: -2, chunk: (118, 144), kind: "BioluminescentRuins"),
+        (id: "sea_loch_grotto",   from_z: 0,  to_z: -2, chunk: (94, 128),  kind: "TidalSeaCave"),
+        (id: "munro_iron_delve",  from_z: 0,  to_z: -1, chunk: (146, 76),  kind: "MountainMine"),
+        (id: "deep_forge_breach", from_z: -2, to_z: -3, chunk: (152, 92),  kind: "MagmaForgeGate"),
+    ],
+)
